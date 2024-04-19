@@ -867,6 +867,31 @@ py::tuple findHomography(py::array_t<double>  correspondences_,
 
     return py::make_tuple(H_,inliers_);
 }
+
+py::tuple findRectifyingHomography(
+	py::array_t<double> points,
+	py::array_t<double> scales,
+	py::array_t<double> orientations,
+	py::array_t<double> weights,
+	size_t image_height,
+	size_t image_width
+)
+{
+	py::buffer_info points_buff = points.request();
+
+	if (points_buff.shape[0] < 3)
+	{
+		throw std::invalid_argument("points should be an array with 2 columns and at least 3 rows");
+	}
+	if (points_buff.shape[1] != 2)
+	{
+		throw std::invalid_argument("points should be an array with 2 columns and at least 3 rows")
+	}
+
+	double *points_ptr = static_cast<double*>(points_buff.ptr);
+	std::vector<double> 
+}
+
 PYBIND11_PLUGIN(pygcransac) {
 
     py::module m("pygcransac", R"doc(

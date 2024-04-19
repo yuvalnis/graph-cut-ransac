@@ -69,6 +69,7 @@
 #include "estimators/solver_homography_bundle_adjustment.h"
 #include "estimators/solver_radial_homography_5pc.h"
 #include "estimators/solver_radial_homography_6pc.h"
+#include "estimators/solver_rectifying_homography_three_sift.h"
 
 namespace gcransac
 {
@@ -103,6 +104,12 @@ namespace gcransac
 		typedef estimator::RobustHomographyEstimator<estimator::solver::HomographyTwoSIFTSolver, // The solver used for fitting a model to a minimal sample
 			estimator::solver::HomographyFourPointSolver> // The solver used for fitting a model to a non-minimal sample
 			SIFTBasedHomographyEstimator;
+
+		// The defauly estimator for rectifying homography fitting with SIFT features
+		typedef estimator::RobustHomographyEstimator<
+			estimator::solver::RectifyingHomographyThreeSIFTSolver,
+			estimator::solver::RectifyingHomographyThreeSIFTSolver>
+			SIFTBasedRectifyingHomographyEstimator;
 
 		// The default estimator for essential matrix fitting
 		typedef estimator::EssentialMatrixEstimator<estimator::solver::EssentialMatrixFivePointNisterSolver, // The solver used for fitting a model to a minimal sample

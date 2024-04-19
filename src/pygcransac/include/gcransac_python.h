@@ -696,3 +696,11 @@ int findHomographySIFT_(
 	double sampler_variance,
 	// The number of RANSAC iterations done in the local optimization
 	int lo_number);
+
+int findRectifyingHomographySIFT_(
+	std::vector<double>& features,
+	std::vector<double>& weights,
+	std::vector<double>& homographies,
+	const size_t &image_width,
+	const size_t &image_height
+);

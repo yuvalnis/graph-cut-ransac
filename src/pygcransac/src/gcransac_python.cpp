@@ -4309,3 +4309,16 @@ int findHomographySIFT_(
 	// Return the number of inliers found
 	return num_inliers;
 }
+
+int findRectifyingHomographySIFT_(
+	const std::vector<double>& points,
+	const std::vector<double>& scales,
+	const std::vector<double>& orientations,
+	const std::vector<double>& weights,
+	const size_t &image_width,
+	const size_t &image_height,
+	std::vector<double>& homographies
+)
+{
+	const si
+}
