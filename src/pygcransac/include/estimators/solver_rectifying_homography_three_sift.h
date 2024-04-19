@@ -81,12 +81,9 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
     const double *weights_ // The weight for each point
 ) const
 {
-    constexpr size_t kEquationsPerSample = 1; // how many equations does each sample give
-    constexpr size_t kRowNumber = kEquationsPerSample * sampleSize();
     constexpr double kScalePower = -1.0 / 3.0;
     constexpr double Eps = 1e-9;
-    const size_t kColNumber = data_.cols + 1;
-    Eigen::MatrixXd coeffs(kRowNumber, kColNumber);
+    Eigen::Matrix<double, 3, 4> coeffs;
 
     const auto *data_ptr = reinterpret_cast<double*>(data_.data);
     for (size_t i = 0; i < sample_number_; ++i)
@@ -106,27 +103,24 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
         coeffs(i, 0) = weight * x;
         coeffs(i, 1) = weight * y;
         coeffs(i, 2) = -weight * pow(s, kScalePower);
-        coeffs(i, 3) = 1.0;
+        coeffs(i, 3) = weight;
     }
     Eigen::Matrix<double, 3, 1> x;
     gcransac::utils::gaussElimination<3>(coeffs, x);
     if (x.hasNaN())
     {
+        fprintf(stderr, "Invalid solution for the minimal model");
         return false;
     }
     // construct homography from x
-    double h7 = x(0);
-    double h8 = x(1);
-    const double alpha = x(2);
-    if (std::abs(alpha) > Eps)
+    if (std::abs(x(2)) > Eps)
     {
-        h7 /= alpha;
-        h8 /= alpha;
+        x /= x(2);
     }
     Homography model;
-    model.descriptor << 1.0, 0.0, 0.0,
-                        0.0, 1.0, 0.0,
-                        h7,  h8,  1.0;
+    model.descriptor << 1.0,  0.0,  0.0,
+                        0.0,  1.0,  0.0,
+                        x(0), x(1), x(2);
     models_.emplace_back(model);
     return true;
 }
@@ -139,7 +133,50 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
     const double *weights_
 ) const
 {
+    constexpr double kScalePower = -1.0 / 3.0;
+    constexpr double Eps = 1e-9;
+    Eigen::MatrixXd coeffs(sample_number_, 3);
+    Eigen::MatrixXd rhs(sample_number_, 1);
 
+    const auto *data_ptr = reinterpret_cast<double*>(data_.data);
+    for (size_t i = 0; i < sample_number_; ++i)
+    {
+        // if the sample indices are not given, they are the first items in the
+        // set of data points.
+        const size_t idx = sample_ == nullptr ? i : sample_[i];
+        // compute position of sample in the set of data points
+        const auto *point_ptr = data_ptr + idx * data_.cols;
+        // unpack sample into position coordinates and scale
+        const auto &x = point_ptr[0];
+        const auto &y = point_ptr[1];
+        const auto &s = point_ptr[2];
+
+        const auto weight = weights_ == nullptr ? 1.0 : weights_[idx];
+
+        coeffs(i, 0) = weight * x;
+        coeffs(i, 1) = weight * y;
+        coeffs(i, 2) = -weight * pow(s, kScalePower);
+        rhs(i) = weight;
+    }
+    // solve linear least squares system
+    Eigen::Matrix<double, 3, 1> x = coeffs.colPivHouseholderQr().solve(rhs);
+    // verify validity of solution
+    if (x.hasNaN())
+    {
+        fprintf(stderr, "Invalid solution for the non-minimal model");
+        return false;
+    }
+    // construct homography from solution
+    if (std::abs(x(2)) > Eps)
+    {
+        x /= x(2);
+    }
+    Homography model;
+    model.descriptor << 1.0,  0.0,  0.0,
+                        0.0,  1.0,  0.0,
+                        x(0), x(1), x(2);
+    models_.emplace_back(model);
+    return true;
 }
 
 OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateModel(
