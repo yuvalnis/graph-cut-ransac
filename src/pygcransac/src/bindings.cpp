@@ -1,4 +1,5 @@
 #include <stdexcept>
+#include <sstream>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl_bind.h>
 #include <pybind11/numpy.h>
@@ -869,27 +870,69 @@ py::tuple findHomography(py::array_t<double>  correspondences_,
 }
 
 py::tuple findRectifyingHomography(
-	py::array_t<double> points,
-	py::array_t<double> scales,
-	py::array_t<double> orientations,
-	py::array_t<double> weights,
-	size_t image_height,
-	size_t image_width
+	py::array_t<double> features
 )
 {
-	py::buffer_info points_buff = points.request();
+	constexpr size_t kFeatureSize = 3;
+	constexpr size_t kNumMinFeatures = 3;
 
-	if (points_buff.shape[0] < 3)
+	py::buffer_info features_buff = features.request();
+
+	if (features_buff.ndim != 2)
 	{
-		throw std::invalid_argument("points should be an array with 2 columns and at least 3 rows");
-	}
-	if (points_buff.shape[1] != 2)
-	{
-		throw std::invalid_argument("points should be an array with 2 columns and at least 3 rows")
+		throw std::invalid_argument("Number of dimensions must be 2.");
 	}
 
-	double *points_ptr = static_cast<double*>(points_buff.ptr);
-	std::vector<double> 
+	const size_t num_features = features_buff.shape[0];
+	const size_t feature_size = features_buff.shape[1];
+	// validate dimenstions of input
+	if (num_features < kNumMinFeatures || feature_size != kFeatureSize)
+	{
+		std::stringstream error_msg;
+		error_msg << "Features should be an array with " << kFeatureSize
+				  << " columns and at least " << kNumMinFeatures << " rows."
+				  << " It has " << feature_size << " columns and "
+				  << num_features << " rows.";
+		throw std::invalid_argument(error_msg.str());
+	}
+	// construct C++ vector for features from python array
+	const auto *features_ptr = static_cast<double*>(features_buff.ptr);
+	std::vector<double> cpp_features;
+	cpp_features.assign(features_ptr, features_ptr + features_buff.size);
+
+	std::vector<double> cpp_homography(9);
+    std::vector<bool> cpp_inliers(num_features);
+	std::vector<double> cpp_weights(num_features, 1.0);	// uniform weights for now
+
+	const auto num_inliers = findRectifyingHomographySIFT_(
+		cpp_features,
+		cpp_weights,
+		cpp_inliers,
+		cpp_homography
+	);
+	// construct python array for inliers from C++ vector
+	py::array_t<bool> inliers = py::array_t<bool>(num_features);
+    py::buffer_info inliers_buff = inliers.request();
+    auto *inliers_ptr = static_cast<bool*>(inliers_buff.ptr);
+    for (size_t i = 0; i < num_features; i++)
+	{
+    	inliers_ptr[i] = cpp_inliers[i];
+	}
+
+    if (num_inliers == 0)
+	{
+        return py::make_tuple(pybind11::cast<pybind11::none>(Py_None), inliers);
+    }
+	// construct python array for homography for C++ vector
+    py::array_t<double> homography = py::array_t<double>({3, 3});
+    py::buffer_info homography_buff = homography.request();
+    auto *homography_ptr = static_cast<double*>(homography_buff.ptr);
+    for (size_t i = 0; i < 9; i++)
+	{
+		homography_ptr[i] = cpp_homography[i];
+	}
+
+    return py::make_tuple(homography, inliers);
 }
 
 PYBIND11_PLUGIN(pygcransac) {
@@ -904,6 +947,7 @@ PYBIND11_PLUGIN(pygcransac) {
            findFundamentalMatrix,
 			findLine2D,
 			findHomography,
+			findRectifyingHomography,
 		   find6DPose,
 		   findEssentialMatrix,
 		   findRigidTransform,
@@ -1069,6 +1113,10 @@ PYBIND11_PLUGIN(pygcransac) {
 		py::arg("lo_number") = 50,
 		py::arg("sampler_variance") = 0.1,
 		py::arg("solver") = 0);
+
+	m.def("findRectifyingHomography", &findRectifyingHomography, R"doc(some doc)doc",
+		py::arg("features")
+	);
 
   return m.ptr();
 }

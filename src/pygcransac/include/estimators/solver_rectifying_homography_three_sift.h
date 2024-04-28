@@ -67,59 +67,32 @@ protected:
         const cv::Mat &data_,
         const size_t *sample_,
         size_t sample_number_,
-        std::vector<Model> &models_,
-        const double *weights_
+        Model &model_
     ) const;
 
 };
-
-std::pair<double, double> centerOfGravity(
-    const cv::Mat &data_, // The set of data points
-    const size_t *sample_, // The sample used for the estimation
-    size_t sample_number_ // The size of the sample
-)
-{
-    double cog_x = 0.0;
-    double cog_y = 0.0;
-    if (sample_number_ > 0)
-    {
-        const auto *data_ptr = reinterpret_cast<double*>(data_.data);
-        for (size_t i = 0; i < sample_number_; ++i)
-        {
-            // if the sample indices are not given, they are the first items in the
-            // set of data points.
-            const size_t idx = sample_ == nullptr ? i : sample_[i];
-            // compute position of sample in the set of data points
-            const auto *point_ptr = data_ptr + idx * data_.cols;
-            // unpack sample into position coordinates and scale
-            const auto &x = point_ptr[0];
-            const auto &y = point_ptr[1];
-            cog_x += x;
-            cog_y += y;
-        }
-        const auto inv_sample_num = 1.0 / static_cast<double>(sample_number_);
-        cog_x *= inv_sample_num;
-        cog_y *= inv_sample_num;
-    }
-    return {cog_x, cog_y};
-}
 
 OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
     const cv::Mat &data_, // The set of data points
     const size_t *sample_, // The sample used for the estimation
     size_t sample_number_, // The size of the sample
-    std::vector<Model> &models_, // The estimated model parameters
-    const double *weights_ // The weight for each point
+    Model &model_ // The estimated model parameters
 ) const
 {
     constexpr double kScalePower = -1.0 / 3.0;
     constexpr double Eps = 1e-9;
 
-    // Explanation taken from Chum, O. and Matas, J.: Planar Affine Rectification from Change of Scale (ACCV 2010).
-    // The origin must not lie on the vanishing line. In traditional directional cameras,
-    // the vanishing line can't "cut through" the convex hull of the observed points.
-    // Therefore, the "center of gravity" of the observed points is a good choice for the origin.
-    const auto [origin_x, origin_y] = centerOfGravity(data_, sample_, sample_number_);
+    if (sample_number_ != sampleSize())
+    {
+        fprintf(
+            stderr,
+            "Minimal model requires exactly %d samples (received %d).\n",
+            sampleSize(),
+            sample_number_
+        );
+        return false;
+    }
+
     const auto *data_ptr = reinterpret_cast<double*>(data_.data);
     Eigen::Matrix<double, 3, 4> coeffs;
     for (size_t i = 0; i < sample_number_; ++i)
@@ -130,16 +103,14 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
         // compute position of sample in the set of data points
         const auto *point_ptr = data_ptr + idx * data_.cols;
         // unpack sample into position coordinates and scale
-        const auto &x = point_ptr[0] - origin_x;
-        const auto &y = point_ptr[1] - origin_y;
+        const auto &x = point_ptr[0];
+        const auto &y = point_ptr[1];
         const auto &s = point_ptr[2];
 
-        const auto weight = weights_ == nullptr ? 1.0 : weights_[idx];
-
-        coeffs(i, 0) = weight * x;
-        coeffs(i, 1) = weight * y;
-        coeffs(i, 2) = -weight * pow(s, kScalePower);
-        coeffs(i, 3) = weight;
+        coeffs(i, 0) = x;
+        coeffs(i, 1) = y;
+        coeffs(i, 2) = -pow(s, kScalePower);
+        coeffs(i, 3) = 1.0;
     }
     Eigen::Matrix<double, 3, 1> x;
     gcransac::utils::gaussElimination<3>(coeffs, x);
@@ -153,11 +124,11 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
     {
         x /= x(2);
     }
-    Homography model;
-    model.descriptor << 1.0,  0.0,  0.0,
-                        0.0,  1.0,  0.0,
-                        x(0), x(1), x(2);
-    models_.emplace_back(model);
+
+    model_.descriptor << 1.0,  0.0,  0.0,
+                         0.0,  1.0,  0.0,
+                         x(0), x(1), x(2);
+    
     return true;
 }
 
@@ -172,11 +143,6 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
     constexpr double kScalePower = -1.0 / 3.0;
     constexpr double Eps = 1e-9;
 
-    // Explanation taken from Chum, O. and Matas, J.: Planar Affine Rectification from Change of Scale (ACCV 2010).
-    // The origin must not lie on the vanishing line. In traditional directional cameras,
-    // the vanishing line can't "cut through" the convex hull of the observed points.
-    // Therefore, the "center of gravity" of the observed points is a good choice for the origin.
-    const auto [origin_x, origin_y] = centerOfGravity(data_, sample_, sample_number_);
     Eigen::MatrixXd coeffs(sample_number_, 3);
     Eigen::MatrixXd rhs(sample_number_, 1);
 
@@ -189,8 +155,8 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
         // compute position of sample in the set of data points
         const auto *point_ptr = data_ptr + idx * data_.cols;
         // unpack sample into position coordinates and scale
-        const auto &x = point_ptr[0] - origin_x;
-        const auto &y = point_ptr[1] - origin_y;
+        const auto &x = point_ptr[0];
+        const auto &y = point_ptr[1];
         const auto &s = point_ptr[2];
 
         const auto weight = weights_ == nullptr ? 1.0 : weights_[idx];
@@ -231,12 +197,16 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateModel(
 {
     if (sample_number_ < sampleSize())
     {
-        fprintf(stderr, "There were not enough affine correspondences provided for the solver (%d < %d).\n", sample_number_, sampleSize());
+        fprintf(stderr,
+            "There weren't enough SIFT features provided for the solver (%d < %d).\n",
+            sample_number_,
+            sampleSize()
+        );
         return false;
     }
     if (sample_number_ == sampleSize())
     {
-        return estimateMinimalModel(data_, sample_, sample_number_, models_, weights_);
+        return estimateMinimalModel(data_, sample_, sample_number_, models_.emplace_back());
     }
     return estimateNonMinimalModel(data_, sample_, sample_number_, models_, weights_);
 }

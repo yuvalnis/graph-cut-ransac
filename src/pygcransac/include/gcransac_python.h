@@ -698,9 +698,8 @@ int findHomographySIFT_(
 	int lo_number);
 
 int findRectifyingHomographySIFT_(
-	std::vector<double>& features,
-	std::vector<double>& weights,
-	std::vector<double>& homographies,
-	const size_t &image_width,
-	const size_t &image_height
+	std::vector<double>& features,	// input SIFT features
+	std::vector<double>& weights,	// input SIFT feature weights
+	std::vector<bool>& inliers,	// output inlier boolean mask
+	std::vector<double>& homography	// output homography
 );
