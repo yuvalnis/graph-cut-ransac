@@ -4345,15 +4345,16 @@ int findRectifyingHomographySIFT_(
 	}
 
 	cv::Mat sample_set(num_features, kFeatureSize, CV_64F, &features[0]);
-	
+
 	// initialize neighborhood graph
 	using NeighborhoodGraph = neighborhood::NeighborhoodGraph<cv::Mat>;
 	// Using only the point coordinates and not the affine elements when constructing the neighborhood.
-	cv::Mat empty_point_matrix(0, 2, CV_64F);
+	cv::Mat empty_point_matrix(0, kFeatureSize, CV_64F);
+	std::vector<double> cell_sizes(kFeatureSize, 0.0);
 	std::unique_ptr<NeighborhoodGraph> neighborhood_graph = std::unique_ptr<NeighborhoodGraph>(
-		new neighborhood::GridNeighborhoodGraph<2>(
+		new neighborhood::GridNeighborhoodGraph<kFeatureSize>(
 			&empty_point_matrix,
-			{0, 0},
+			cell_sizes,
 			1
 		)
 	);
@@ -4402,6 +4403,10 @@ int findRectifyingHomographySIFT_(
 	GCRANSAC<Estimator, NeighborhoodGraph> gcransac;
 	// TODO pass functions arguments to configure GC-RANSAC
 	// gcransac.settings.threshold = threshold;
+
+	// without this flag the code fails because the empty neighborhood is access,
+	// resulting in a segmentation flow.
+	gcransac.settings.do_local_optimization = false; 
 
 	Homography model;
 	gcransac.run(

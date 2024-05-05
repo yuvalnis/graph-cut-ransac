@@ -40,6 +40,7 @@
 #include "estimators/homography_estimator.h"
 #include "estimators/homography_affine_correspondence_estimator.h"
 #include "estimators/radial_homography_estimator.h"
+#include "estimators/rectifying_homography_estimator.h"
 #include "estimators/essential_estimator.h"
 #include "estimators/perspective_n_point_estimator.h"
 #include "estimators/rigid_transformation_estimator.h"
@@ -105,8 +106,8 @@ namespace gcransac
 			estimator::solver::HomographyFourPointSolver> // The solver used for fitting a model to a non-minimal sample
 			SIFTBasedHomographyEstimator;
 
-		// The defauly estimator for rectifying homography fitting with SIFT features
-		typedef estimator::RobustHomographyEstimator<
+		// The default estimator for rectifying homography fitting with SIFT features
+		typedef estimator::RectifyingHomographyEstimator<
 			estimator::solver::RectifyingHomographyThreeSIFTSolver,
 			estimator::solver::RectifyingHomographyThreeSIFTSolver>
 			SIFTBasedRectifyingHomographyEstimator;

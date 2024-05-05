@@ -67,7 +67,7 @@ protected:
         const cv::Mat &data_,
         const size_t *sample_,
         size_t sample_number_,
-        Model &model_
+        std::vector<Model> &models_
     ) const;
 
 };
@@ -76,7 +76,7 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
     const cv::Mat &data_, // The set of data points
     const size_t *sample_, // The sample used for the estimation
     size_t sample_number_, // The size of the sample
-    Model &model_ // The estimated model parameters
+   std::vector<Model> &models_ // The estimated model parameters
 ) const
 {
     constexpr double kScalePower = -1.0 / 3.0;
@@ -116,7 +116,6 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
     gcransac::utils::gaussElimination<3>(coeffs, x);
     if (x.hasNaN())
     {
-        fprintf(stderr, "Invalid solution for the minimal model");
         return false;
     }
     // construct homography from x
@@ -124,11 +123,11 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
     {
         x /= x(2);
     }
-
-    model_.descriptor << 1.0,  0.0,  0.0,
-                         0.0,  1.0,  0.0,
-                         x(0), x(1), x(2);
-    
+    Homography model;
+    model.descriptor << 1.0,  0.0,  0.0,
+                        0.0,  1.0,  0.0,
+                        x(0), x(1), x(2);
+    models_.emplace_back(model);
     return true;
 }
 
@@ -206,7 +205,7 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateModel(
     }
     if (sample_number_ == sampleSize())
     {
-        return estimateMinimalModel(data_, sample_, sample_number_, models_.emplace_back());
+        return estimateMinimalModel(data_, sample_, sample_number_, models_);
     }
     return estimateNonMinimalModel(data_, sample_, sample_number_, models_, weights_);
 }
