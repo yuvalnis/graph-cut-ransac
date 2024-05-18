@@ -142,4 +142,17 @@ namespace gcransac
 			descriptor = other.descriptor;
 		}
 	};
+
+	class RectifyingHomography : public Model
+	{
+	public:
+		RectifyingHomography() :
+			Model(Eigen::MatrixXd(1, 3))
+		{}
+
+		RectifyingHomography(const RectifyingHomography& other)
+		{
+			descriptor = other.descriptor;
+		}
+	}
 }
