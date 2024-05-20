@@ -54,6 +54,8 @@ public:
         const double *weights_ = nullptr // The weight for each point
     ) const;
 
+    static double residual(const cv::Mat& feature, const Eigen::MatrixXd& descriptor);
+
 protected:
     OLGA_INLINE bool estimateNonMinimalModel(
         const cv::Mat &data_,
@@ -110,7 +112,7 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
         coeffs(i, 0) = x;
         coeffs(i, 1) = y;
         coeffs(i, 2) = -pow(s, kScalePower);
-        coeffs(i, 3) = 1.0;
+        coeffs(i, 3) = -1.0;
     }
     Eigen::Matrix<double, 3, 1> x;
     gcransac::utils::gaussElimination<3>(coeffs, x);
@@ -163,7 +165,7 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
         coeffs(i, 0) = weight * x;
         coeffs(i, 1) = weight * y;
         coeffs(i, 2) = -weight * pow(s, kScalePower);
-        rhs(i) = weight;
+        rhs(i) = -weight;
     }
     // solve linear least squares system
     Eigen::Matrix<double, 3, 1> x = coeffs.colPivHouseholderQr().solve(rhs);
@@ -208,6 +210,34 @@ OLGA_INLINE bool RectifyingHomographyThreeSIFTSolver::estimateModel(
         return estimateMinimalModel(data_, sample_, sample_number_, models_);
     }
     return estimateNonMinimalModel(data_, sample_, sample_number_, models_, weights_);
+}
+
+double RectifyingHomographyThreeSIFTSolver::residual(
+    const cv::Mat& feature,
+    const Eigen::MatrixXd& descriptor
+)
+{
+    constexpr double kScalePower = -1.0 / 3.0;
+
+    if (descriptor.rows() != 1 || descriptor.cols() != 3)
+    {
+        std::stringstream error_msg;
+        error_msg << "Expected a 1x3 matrix as a descriptor. " 
+                  << "Received the following " << descriptor.rows() << "x"
+                  << descriptor.cols() << " matrix instead:\n" << descriptor 
+                  << "\n";
+        throw std::runtime_error(error_msg.str());
+    }
+    const auto h7 = descriptor(0);
+    const auto h8 = descriptor(1);
+    const auto alpha = descriptor(2);
+
+    const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
+    const auto& x = feature_ptr[0];
+    const auto& y = feature_ptr[1];
+    const auto& s = feature_ptr[2];
+
+    return h7 * x + h8 * y - alpha * pow(s, kScalePower) + 1.0;
 }
 
 }

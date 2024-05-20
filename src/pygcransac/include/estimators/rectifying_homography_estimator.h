@@ -245,45 +245,7 @@ public:
 
     double residual(const cv::Mat& feature_, const Eigen::MatrixXd& descriptor_) const
     {
-        constexpr double kMinDeterminant = 1e-08;
-        constexpr double alpha = 1.0; // for now we assume alpha can only take on this fixed value
-        if (descriptor_.rows() != 3 || descriptor_.cols() != 3)
-        {
-            std::stringstream error_msg;
-            error_msg << "A descriptor of a rectifying homography has to be a "
-                      << "3x3 matrix.\n The input descriptor is a "
-                      << descriptor_.rows() << "x" << descriptor_.cols()
-                      << " matrix:\n" << descriptor_ << "\n";
-            throw std::runtime_error(error_msg.str());
-        }
-        
-        if (std::abs(descriptor_.determinant()) < kMinDeterminant)
-        {
-            throw std::runtime_error("The descriptor of a rectifying homography should be invertible");
-        }
-
-        const auto* feature_ptr = reinterpret_cast<double*>(feature_.data);
-        const auto& x = feature_ptr[0];
-        const auto& y = feature_ptr[1];
-        const auto& s = feature_ptr[2];
-
-        const Eigen::Vector3d orig_p(x, y, 1.0);
-        const auto rectified_p = descriptor_.inverse() * orig_p;
-
-        if (std::abs(rectified_p.z()) < std::numeric_limits<double>::epsilon())
-        {
-            throw std::runtime_error("The given descriptor maps the feature point to infinity in the rectified image");
-        }
-
-        const auto rectified_x = rectified_p.x() / rectified_p.z();
-        const auto rectified_y = rectified_p.y() / rectified_p.z();
-        const auto h7 = descriptor_(2, 0);
-        const auto h8 = descriptor_(2, 1);
-
-        const auto reprojected_s =
-            std::pow(alpha / (h7 * rectified_x + h8 * rectified_y + 1.0), 3.0);
-
-        return 1.0 - (s / reprojected_s);
+        return _MinimalSolverEngine::residual(feature_, descriptor_);
     }
 
     OLGA_INLINE double residual(const cv::Mat& feature_, const Model& model_) const

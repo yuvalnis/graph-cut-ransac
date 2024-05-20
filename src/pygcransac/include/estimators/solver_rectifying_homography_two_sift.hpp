@@ -43,7 +43,7 @@ public:
     /// weights are used by default if the input is a null pointer.
     /// @return True if the model parameters estimation was successful.
     /// False, otherwise.
-    OLGA_INLINE bool estimateModel(
+    bool estimateModel(
         const cv::Mat& data_,
         const size_t *sample_,
         size_t sample_number_,
@@ -51,8 +51,10 @@ public:
         const double *weights_ = nullptr
     ) const;
 
+    static double residual(const cv::Mat& feature, const Eigen::MatrixXd& descriptor);
+
 protected:
-    OLGA_INLINE bool estimateNonMinimalModel(
+    bool estimateNonMinimalModel(
         const cv::Mat &data_,
         const size_t *sample_,
         size_t sample_number_,
@@ -60,7 +62,7 @@ protected:
         const double *weights_
     ) const;
 
-    OLGA_INLINE bool estimateMinimalModel(
+    bool estimateMinimalModel(
         const cv::Mat &data_,
         const size_t *sample_,
         size_t sample_number_,
@@ -75,7 +77,7 @@ void lineFromSIFT(double x, double y, double theta, Eigen::Vector3d& line)
     line = Eigen::Vector3d(s, -c, y * c - x * s);
 }
 
-OLGA_INLINE bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
+bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     const cv::Mat &data_,
     const size_t *sample_,
     size_t sample_number_,
@@ -133,7 +135,7 @@ OLGA_INLINE bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     lineFromSIFT(x1, y1, t1, l1);
     Eigen::Vector3d l2;
     lineFromSIFT(x2, y2, t2, l2);
-    const auto vp = l1.cross(l2); // intersection of lines
+    auto vp = l1.cross(l2); // intersection of lines
     if (std::abs(vp(2)) > Eps)
     {
         vp /= vp(2);
@@ -150,10 +152,10 @@ OLGA_INLINE bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     {
         return false;
     }
-    if (std::abs(x(2)) > Eps)
-    {
-        x /= x(2);
-    }
+    // if (std::abs(x(2)) > Eps)
+    // {
+    //     x /= x(2);
+    // }
 
     RectifyingHomography model;
     model.descriptor << x(0), x(1), x(2);
@@ -161,7 +163,7 @@ OLGA_INLINE bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     return true;
 }
 
-OLGA_INLINE bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
+bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     const cv::Mat &data_,
     const size_t *sample_,
     size_t sample_number_,
@@ -187,9 +189,9 @@ OLGA_INLINE bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     for (size_t i = 0; i < sample_number_; ++i)
     {
         const auto* sample = get_sample_ptr(i); // first sample
-        const auto x = sample1[0]; // first x-coordinate
-        const auto y = sample1[1]; // first y-coordinate
-        const auto s = sample1[3]; // first scale
+        const auto x = sample[0]; // first x-coordinate
+        const auto y = sample[1]; // first y-coordinate
+        const auto s = sample[3]; // first scale
 
         coeffs(curr_idx, 0) = x;
         coeffs(curr_idx, 1) = y;
@@ -221,7 +223,7 @@ OLGA_INLINE bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
             const auto sj = sample_j[3]; // first scale
 
             lineFromSIFT(xj, yj, tj, lj);
-            const auto vp = li.cross(lj); // intersection of lines
+            auto vp = li.cross(lj); // intersection of lines
             if (std::abs(vp(2)) > Eps)
             {
                 vp /= vp(2);
@@ -235,6 +237,76 @@ OLGA_INLINE bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
             curr_idx++;
         }
     }
+    // solve linear least squares system
+    Eigen::Matrix<double, 3, 1> x = coeffs.colPivHouseholderQr().solve(rhs);
+    // verify validity of solution
+    if (x.hasNaN())
+    {
+        fprintf(stderr, "Invalid solution for the non-minimal model");
+        return false;
+    }
+    // if (std::abs(x(2)) > Eps)
+    // {
+    //     x /= x(2);
+    // }
+
+    RectifyingHomography model;
+    model.descriptor << x(0), x(1), x(2);
+    models_.emplace_back(model);
+    return true;
+}
+
+bool RectifyingHomographyTwoSIFTSolver::estimateModel(
+    const cv::Mat& data_,
+    const size_t *sample_,
+    size_t sample_number_,
+    std::vector<Model> &models_,
+    const double *weights_
+) const
+{
+    if (sample_number_ < sampleSize())
+    {
+        fprintf(stderr,
+            "There weren't enough SIFT features provided for the solver (%d < %d).\n",
+            sample_number_,
+            sampleSize()
+        );
+        return false;
+    }
+    if (sample_number_ == sampleSize())
+    {
+        return estimateMinimalModel(data_, sample_, sample_number_, models_);
+    }
+    return estimateNonMinimalModel(data_, sample_, sample_number_, models_, weights_);
+}
+
+double RectifyingHomographyTwoSIFTSolver::residual(
+    const cv::Mat& feature,
+    const Eigen::MatrixXd& descriptor
+)
+{
+    constexpr double kScalePower = -1.0 / 3.0;
+
+    if (descriptor.rows() != 1 || descriptor.cols() != 3)
+    {
+        std::stringstream error_msg;
+        error_msg << "Expected a 1x3 matrix as a descriptor. " 
+                  << "Received the following " << descriptor.rows() << "x"
+                  << descriptor.cols() << " matrix instead:\n" << descriptor 
+                  << "\n";
+        throw std::runtime_error(error_msg.str());
+    }
+    const auto h7 = descriptor(0);
+    const auto h8 = descriptor(1);
+    const auto alpha = descriptor(2);
+
+    const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
+    const auto& x = feature_ptr[0];
+    const auto& y = feature_ptr[1];
+    // const auto& t = feature_ptr[2];
+    const auto& s = feature_ptr[3];
+
+    return h7 * x + h8 * y - alpha * pow(s, kScalePower) + 1.0;
 }
 
 }

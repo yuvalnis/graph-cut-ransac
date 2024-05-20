@@ -154,5 +154,5 @@ namespace gcransac
 		{
 			descriptor = other.descriptor;
 		}
-	}
+	};
 }

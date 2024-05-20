@@ -4359,17 +4359,8 @@ int findRectifyingHomographySIFT_(
 		)
 	);
 
-	// if (!neighborhood_graph->isInitialized())
-	// {
-	// 	NeighborhoodGraph *neighborhood_graph_ptr = neighborhood_graph.release();
-	// 	delete neighborhood_graph_ptr;
-
-	// 	fprintf(stderr, "The neighborhood graph was not initialized successfully.\n");
-	// 	return 0;
-	// }
-
 	// initialize SIFT-based rectifying homography estimator
-	typedef utils::SIFTBasedRectifyingHomographyEstimator Estimator;
+	typedef utils::ScaleBasedRectifyingHomographyEstimator Estimator;
 	Estimator estimator;
 
 	// initialize sampler
