@@ -143,11 +143,16 @@ namespace gcransac
 		}
 	};
 
+	/// @brief Specialized model for rectifying homography containing by order
+	/// 3 variables for the homography parameters h7, h8 and alpha (relative
+	/// scale of the feature class), and 6 variables that hold the two vanishing
+	/// points in homogeneous representation corresponding to that homography
+	/// in the non-rectified projective plane.
 	class RectifyingHomography : public Model
 	{
 	public:
 		RectifyingHomography() :
-			Model(Eigen::MatrixXd(1, 3))
+			Model(Eigen::MatrixXd(1, 9))
 		{}
 
 		RectifyingHomography(const RectifyingHomography& other)

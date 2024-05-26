@@ -77,6 +77,19 @@ void lineFromSIFT(double x, double y, double theta, Eigen::Vector3d& line)
     line = Eigen::Vector3d(s, -c, y * c - x * s);
 }
 
+void makeHomography(double h7, double h8, Eigen::Matrix3d& H)
+{
+    H = Eigen::Matrix3d::Identity();
+    H(2, 0) = h7;
+    H(2, 1) = h8;
+}
+
+void orthogonalVanishingPoint(const Eigen::Vector3d& vp, const Eigen::Matrix3d& H, Eigen::Vector3d& result)
+{
+    const Eigen::Vector3d z_hat(0.0, 0.0, 1.0);
+    result = H.inverse() * ((H * vp).cross(z_hat));
+}
+
 bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     const cv::Mat &data_,
     const size_t *sample_,
@@ -156,9 +169,17 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     // {
     //     x /= x(2);
     // }
-
+    
+    // compute vanishing point orthogonal to the one used to estimate the model
+    Eigen::Matrix3d H;
+    makeHomography(x(0), x(1), H);
+    Eigen::Vector3d vp_perp;
+    orthogonalVanishingPoint(vp, H, vp_perp);
+    // construct model
     RectifyingHomography model;
-    model.descriptor << x(0), x(1), x(2);
+    model.descriptor << x(0), x(1), x(2),
+                        vp(0), vp(1), vp(2),
+                        vp_perp(0), vp_perp(1), vp_perp(2);
     models_.emplace_back(model);
     return true;
 }
@@ -250,6 +271,18 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     //     x /= x(2);
     // }
 
+    // compute vanishing point orthogonal to the one used to estimate the model
+    Eigen::Matrix3d H;
+    makeHomography(x(0), x(1), H);
+    // TODO compute a vanishing point and its orthogonal counterpart in the non-minimal solution.
+    Eigen::Vector3d vp_perp;
+    orthogonalVanishingPoint(vp, H, vp_perp);
+    // construct model
+    RectifyingHomography model;
+    model.descriptor << x(0), x(1), x(2),
+                        vp(0), vp(1), vp(2),
+                        vp_perp(0), vp_perp(1), vp_perp(2);
+
     RectifyingHomography model;
     model.descriptor << x(0), x(1), x(2);
     models_.emplace_back(model);
@@ -285,12 +318,10 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     const Eigen::MatrixXd& descriptor
 )
 {
-    constexpr double kScalePower = -1.0 / 3.0;
-
-    if (descriptor.rows() != 1 || descriptor.cols() != 3)
+    if (descriptor.rows() != 1 || descriptor.cols() != 9)
     {
         std::stringstream error_msg;
-        error_msg << "Expected a 1x3 matrix as a descriptor. " 
+        error_msg << "Expected a 1x9 matrix as a descriptor. " 
                   << "Received the following " << descriptor.rows() << "x"
                   << descriptor.cols() << " matrix instead:\n" << descriptor 
                   << "\n";
@@ -299,14 +330,30 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     const auto h7 = descriptor(0);
     const auto h8 = descriptor(1);
     const auto alpha = descriptor(2);
+    const Eigen::RowVector3d vp1 = descriptor.block<1, 3>(0, 3);
+    const Eigen::RowVector3d vp2 = descriptor.block<1, 3>(0, 6);
 
     const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
     const auto& x = feature_ptr[0];
     const auto& y = feature_ptr[1];
-    // const auto& t = feature_ptr[2];
+    const auto& t = feature_ptr[2];
     const auto& s = feature_ptr[3];
-
-    return h7 * x + h8 * y - alpha * pow(s, kScalePower) + 1.0;
+    // the scale change which fits the model
+    const auto model_s = pow(alpha / (h7 * x + h8 * y + 1), 3.0);
+    // scale-based residual: the deviation between the input scale and the model scale
+    const auto r_scale = 1.0 - (s / model_s);
+    // line induced by coordinates and orientation
+    Eigen::Vector3d line;
+    lineFromSIFT(x, y, t, line);
+    // orientation-based residual: the minimal Euclidean distance between the
+    // line and the two vanishing points
+    const auto d1 = line.dot(vp1);
+    const auto d2 = line.dot(vp2);
+    const auto r_orientation = (std::abs(d1) < std::abs(d2)) ? d1 : d2; 
+    // TODO currently it is only possible to return a scalar residual, so we
+    // are forced to return a mix of the two residuals, which loses the geometric
+    // meaning of each one.
+    return r_scale * r_orientation;
 }
 
 }
