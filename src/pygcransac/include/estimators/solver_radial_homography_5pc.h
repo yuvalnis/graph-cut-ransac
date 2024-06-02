@@ -45,7 +45,7 @@ namespace gcransac
 		namespace solver
 		{
 			// This is the estimator class for estimating a homography matrix between two images. A model estimation method and error calculation method are implemented
-			class RadialHomography5PC : public SolverEngine
+			class RadialHomography5PC : public SolverEngine<>
 			{
 			public:
 				RadialHomography5PC() : K1(Eigen::Matrix3d::Identity()),

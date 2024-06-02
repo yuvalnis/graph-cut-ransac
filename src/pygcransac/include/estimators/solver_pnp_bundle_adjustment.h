@@ -40,7 +40,7 @@ namespace gcransac
 		namespace solver
 		{
 			// This is the estimator class for estimating a homography matrix between two images. A model estimation method and error calculation method are implemented
-			class PnPBundleAdjustment : public SolverEngine
+			class PnPBundleAdjustment : public SolverEngine<>
 			{
 			protected:
 				// The options for the bundle adjustment

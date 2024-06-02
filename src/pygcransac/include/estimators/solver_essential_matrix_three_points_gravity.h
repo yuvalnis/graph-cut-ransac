@@ -45,7 +45,7 @@ namespace gcransac
 		{
 			// This is the estimator class for estimating an essential matrix between two images
 			// when we are given the gravity direction in the two images.
-			class EssentialMatrixThreePointsGravity : public SolverEngine
+			class EssentialMatrixThreePointsGravity : public SolverEngine<>
 			{
 			public:
 				EssentialMatrixThreePointsGravity() : 

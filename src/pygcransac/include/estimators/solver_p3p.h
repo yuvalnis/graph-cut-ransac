@@ -38,7 +38,7 @@ namespace gcransac
 		namespace solver
 		{
 			// This is the estimator class for estimating a homography matrix between two images. A model estimation method and error calculation method are implemented
-			class P3PSolver : public SolverEngine
+			class P3PSolver : public SolverEngine<>
 			{
 			public:
 				P3PSolver()
