@@ -6,7 +6,7 @@
 namespace gcransac::estimator::solver
 {
 
-class RectifyingHomographyTwoSIFTSolver : public SolverEngine
+class RectifyingHomographyTwoSIFTSolver : public SolverEngine<RectifyingHomography>
 {
 
 public:
