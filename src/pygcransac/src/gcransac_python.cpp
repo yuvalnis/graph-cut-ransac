@@ -4332,7 +4332,7 @@ int findHomographySIFT_(
 	return num_inliers;
 }
 
-int findRectifyingHomographySIFT_(
+int findRectifyingHomographyScaleOnly_(
 	std::vector<double>& features,	// input SIFT features
 	std::vector<double>& weights,	// input SIFT feature weights
 	std::vector<bool>& inliers,	// output inlier boolean mask
@@ -4453,4 +4453,138 @@ int findRectifyingHomographySIFT_(
 	delete neighborhood_graph_ptr;
 
 	return num_inliers;
+}
+
+int findRectifyingHomographySIFT_(
+	std::vector<double>& features, // input SIFT features
+	std::vector<double>& weights, // input SIFT feature weights
+	double threshold, // threshold for inlier selection
+	std::vector<bool>& inliers,	// output inlier boolean mask
+	std::vector<double>& homography, // output estimated homography
+	std::vector<double>& vanishing_points // output vanishing points corresponsing to the estimated homography 
+)
+{
+	constexpr size_t kFeatureSize = 4;
+	
+	if (features.empty() || features.size() % kFeatureSize != 0)
+	{
+		fprintf(stderr,
+			"The container of SIFT features should have a non-zero size which \
+            is a multiple of %lu. Its size is %lu.\n",
+			kFeatureSize,
+			features.size()
+		);
+		return 0;
+	}
+
+	const size_t num_features = features.size() / kFeatureSize; 
+
+	if (num_features != weights.size())
+	{
+		fprintf(
+			stderr,
+			"The number of weights (%lu) is different than the number of features (%lu).\n",
+			weights.size(),
+			num_features
+		);
+		return 0;
+	}
+
+    cv::Mat sample_set(num_features, kFeatureSize, CV_64F, &features[0]);
+
+    // initialize neighborhood graph
+	using NeighborhoodGraph = neighborhood::NeighborhoodGraph<cv::Mat>;
+	cv::Mat empty_point_matrix(0, kFeatureSize, CV_64F);
+	std::vector<double> cell_sizes(kFeatureSize, 0.0);
+	std::unique_ptr<NeighborhoodGraph> neighborhood_graph = std::unique_ptr<NeighborhoodGraph>(
+		new neighborhood::GridNeighborhoodGraph<kFeatureSize>(
+			&empty_point_matrix,
+			cell_sizes,
+			1
+		)
+	);
+
+    // initialize SIFT-based rectifying homography estimator
+	typedef utils::SIFTBasedRectifyingHomographyEstimator Estimator;
+	Estimator estimator;
+
+	// initialize sampler
+	typedef sampler::Sampler<cv::Mat, size_t> AbstractSampler;
+	// the main sampler is used for sampling in the main RANSAC loop
+	// TODO enable choosing between types of samplers, and not just the uniform sampler
+	std::unique_ptr<AbstractSampler> main_sampler = std::unique_ptr<AbstractSampler>(
+		new sampler::UniformSampler(&sample_set)
+	);
+
+    // The local optimization sampler is used inside the local optimization
+	sampler::UniformSampler local_optimization_sampler(&sample_set);
+
+	if (!main_sampler->isInitialized() || !local_optimization_sampler.isInitialized())
+	{
+		// It is ugly: the unique_ptr does not check for virtual descructors in the base class.
+		// Therefore, the derived class's objects are not deleted automatically. 
+		// This causes a memory leaking. I hate C++.
+		AbstractSampler *sampler_ptr = main_sampler.release();
+		delete sampler_ptr;
+
+		NeighborhoodGraph *neighborhood_graph_ptr = neighborhood_graph.release();
+		delete neighborhood_graph_ptr;
+
+		fprintf(stderr, "One of the samplers is not initialized successfully.\n");
+		return 0;
+	}
+
+    preemption::EmptyPreemptiveVerfication<Estimator> preemptive_verification;
+	inlier_selector::EmptyInlierSelector<Estimator, NeighborhoodGraph> inlier_selector(neighborhood_graph.get());
+
+	GCRANSAC<Estimator, NeighborhoodGraph> gcransac;
+	// TODO pass functions arguments to configure GC-RANSAC
+	gcransac.settings.threshold = threshold;
+
+	// without this flag the code fails because the empty neighborhood is access,
+	// resulting in a segmentation flow.
+	gcransac.settings.do_local_optimization = false; 
+
+	RectifyingHomography model;
+	gcransac.run(
+		sample_set, estimator, main_sampler.get(), &local_optimization_sampler,
+		neighborhood_graph.get(), model, preemptive_verification, inlier_selector
+	);
+	const auto& statistics = gcransac.getRansacStatistics();
+
+    const Eigen::Matrix3d H = model.denormalization_transform * model.descriptor;
+	// store final homography in vector in row-major order
+	homography.resize(9);
+	for (size_t i = 0; i < 3; i++)
+	{
+		for (size_t j = 0; j < 3; j++)
+		{
+			homography[i * 3 + j] = model.descriptor(i, j);
+		}	
+	}
+	// store coordinates of vanishing points as two concatenated column-vectors
+	vanishing_points.resize(6);
+	for (size_t i = 0; i < 3; i++)
+	{
+		vanishing_points[2 * i] = model.vp1(i);
+		vanishing_points[2 * i + 1] = model.vp2(i);
+	}
+
+    inliers.resize(num_features, false);
+	const size_t num_inliers = statistics.inliers.size();
+	for (auto pt_idx = 0; pt_idx < num_features; ++pt_idx) {
+		inliers[pt_idx] = false;
+
+	}
+	for (size_t pt_idx = 0; pt_idx < num_inliers; ++pt_idx) {
+		inliers[statistics.inliers[pt_idx]] = true;
+	}
+
+	AbstractSampler *sampler_ptr = main_sampler.release();
+	delete sampler_ptr;
+
+	NeighborhoodGraph *neighborhood_graph_ptr = neighborhood_graph.release();
+	delete neighborhood_graph_ptr;
+
+	return static_cast<int>(num_inliers);
 }

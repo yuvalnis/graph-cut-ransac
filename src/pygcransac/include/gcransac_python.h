@@ -697,9 +697,18 @@ int findHomographySIFT_(
 	// The number of RANSAC iterations done in the local optimization
 	int lo_number);
 
-int findRectifyingHomographySIFT_(
+int findRectifyingHomographyScaleOnly_(
 	std::vector<double>& features,	// input SIFT features
 	std::vector<double>& weights,	// input SIFT feature weights
 	std::vector<bool>& inliers,	// output inlier boolean mask
 	std::vector<double>& homography	// output homography
+);
+
+int findRectifyingHomographySIFT_(
+	std::vector<double>& features,	// input SIFT features
+	std::vector<double>& weights,	// input SIFT feature weights
+	double threshold, // threshold for inlier selection
+	std::vector<bool>& inliers,	// output inlier boolean mask
+	std::vector<double>& homography,	// output homography
+	std::vector<double>& vanishing_points // output vanishing points corresponsing to the estimated homography 
 );

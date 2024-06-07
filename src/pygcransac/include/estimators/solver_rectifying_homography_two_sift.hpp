@@ -6,6 +6,8 @@
 namespace gcransac::estimator::solver
 {
 
+constexpr double Eps = 1e-9;
+
 class RectifyingHomographyTwoSIFTSolver : public SolverEngine<RectifyingHomography>
 {
 
@@ -51,7 +53,17 @@ public:
         const double *weights_ = nullptr
     ) const;
 
-    static double residual(const cv::Mat& feature, const Eigen::MatrixXd& descriptor);
+    static double residual(
+        const cv::Mat& feature,
+        const Eigen::MatrixXd& descriptor
+    );
+    static bool normalizePoints(
+        const cv::Mat& data,
+        const size_t* sample,
+        const size_t& sample_number,
+        cv::Mat& normalized_features,
+        Eigen::Matrix3d& normalizing_transform
+    );
 
 protected:
     bool estimateNonMinimalModel(
@@ -77,18 +89,27 @@ void lineFromSIFT(double x, double y, double theta, Eigen::Vector3d& line)
     line = Eigen::Vector3d(s, -c, y * c - x * s);
 }
 
-void makeHomography(double h7, double h8, Eigen::Matrix3d& H)
-{
-    H = Eigen::Matrix3d::Identity();
-    H(2, 0) = h7;
-    H(2, 1) = h8;
-}
-
-void orthogonalVanishingPoint(const Eigen::Vector3d& vp, const Eigen::Matrix3d& H, Eigen::Vector3d& result)
-{
-    const Eigen::Vector3d z_hat(0.0, 0.0, 1.0);
-    result = H.inverse() * ((H * vp).cross(z_hat));
-}
+// void orthogonalVanishingPoint(
+//     const Eigen::Vector3d& vp,
+//     const Eigen::Matrix3d& H,
+//     Eigen::Vector3d& result
+// )
+// {
+//     const Eigen::Vector3d z_hat(0.0, 0.0, 1.0);
+//     const Eigen::Vector3d vp_rect = H * vp;
+//     if (std::abs(vp_rect(2)) > Eps)
+//     {
+//         fprintf(
+//             stderr,
+//             "Rectified vanishing point should be at infinity 
+//             (homogeneous coordinate should be zero, but instead its 
+//             value is %f). \n",
+//             vp_rect(2)
+//         );
+//     }
+//     vp_rect(2) = 0.0; // zero-out homogeneous coordinate to receive expect result
+//     result = H.inverse() * vp_rect.cross(z_hat);
+// }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     const cv::Mat &data_,
@@ -98,11 +119,10 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
 ) const
 {
     constexpr double kScalePower = -1.0 / 3.0;
-    constexpr double Eps = 1e-9;
     // helper function to fetch correct sample
     auto get_sample_ptr = [sample_, &data_](size_t i) {
         const auto *data_ptr = reinterpret_cast<double*>(data_.data);
-        const size_t idx = sample_ == nullptr ? i : sample_[i];
+        const size_t idx = (sample_ == nullptr) ? i : sample_[i];
         return data_ptr + idx * data_.cols;
     };
 
@@ -165,21 +185,15 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     {
         return false;
     }
-    // if (std::abs(x(2)) > Eps)
-    // {
-    //     x /= x(2);
-    // }
-    
-    // compute vanishing point orthogonal to the one used to estimate the model
-    Eigen::Matrix3d H;
-    makeHomography(x(0), x(1), H);
-    Eigen::Vector3d vp_perp;
-    orthogonalVanishingPoint(vp, H, vp_perp);
     // construct model
-    RectifyingHomography model;
-    model.descriptor << x(0), x(1), x(2),
-                        vp(0), vp(1), vp(2),
-                        vp_perp(0), vp_perp(1), vp_perp(2);
+    const auto h7 = x(0);
+    const auto h8 = x(1);
+    Homography model;
+    model.descriptor << 1, 0, 0
+                        0, 1, 0,
+                        h7, h8, 1;
+    model.alpha = x(2);
+    // TODO update vanishing points in model
     models_.emplace_back(model);
     return true;
 }
@@ -193,11 +207,10 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
 ) const
 {
     constexpr double kScalePower = -1.0 / 3.0;
-    constexpr double Eps = 1e-9;
     // helper function to fetch correct sample
     auto get_sample_ptr = [sample_, &data_](size_t i) {
         const auto *data_ptr = reinterpret_cast<double*>(data_.data);
-        const size_t idx = sample_ == nullptr ? i : sample_[i];
+        const size_t idx = (sample_ == nullptr) ? i : sample_[i];
         return data_ptr + idx * data_.cols;
     };
 
@@ -266,25 +279,15 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
         fprintf(stderr, "Invalid solution for the non-minimal model");
         return false;
     }
-    // if (std::abs(x(2)) > Eps)
-    // {
-    //     x /= x(2);
-    // }
-
-    // compute vanishing point orthogonal to the one used to estimate the model
-    Eigen::Matrix3d H;
-    makeHomography(x(0), x(1), H);
-    // TODO compute a vanishing point and its orthogonal counterpart in the non-minimal solution.
-    Eigen::Vector3d vp_perp;
-    orthogonalVanishingPoint(vp, H, vp_perp);
     // construct model
-    RectifyingHomography model;
-    model.descriptor << x(0), x(1), x(2),
-                        vp(0), vp(1), vp(2),
-                        vp_perp(0), vp_perp(1), vp_perp(2);
-
-    RectifyingHomography model;
-    model.descriptor << x(0), x(1), x(2);
+    const auto h7 = x(0);
+    const auto h8 = x(1);
+    Homography model;
+    model.descriptor << 1, 0, 0
+                        0, 1, 0,
+                        h7, h8, 1;
+    model.alpha = x(2);
+    // TODO update vanishing points in model
     models_.emplace_back(model);
     return true;
 }
@@ -315,7 +318,7 @@ bool RectifyingHomographyTwoSIFTSolver::estimateModel(
 
 double RectifyingHomographyTwoSIFTSolver::residual(
     const cv::Mat& feature,
-    const Eigen::MatrixXd& descriptor
+    const RectifyingHomography& model
 )
 {
     if (descriptor.rows() != 1 || descriptor.cols() != 9)
@@ -327,11 +330,10 @@ double RectifyingHomographyTwoSIFTSolver::residual(
                   << "\n";
         throw std::runtime_error(error_msg.str());
     }
-    const auto h7 = descriptor(0);
-    const auto h8 = descriptor(1);
-    const auto alpha = descriptor(2);
-    const Eigen::RowVector3d vp1 = descriptor.block<1, 3>(0, 3);
-    const Eigen::RowVector3d vp2 = descriptor.block<1, 3>(0, 6);
+    const auto& H = model.descriptor;
+    const auto alpha = model.alpha;
+    const auto& vp1 = model.vp1;
+    const auto& vp2 = model.vp2;
 
     const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
     const auto& x = feature_ptr[0];
@@ -339,7 +341,9 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     const auto& t = feature_ptr[2];
     const auto& s = feature_ptr[3];
     // the scale change which fits the model
-    const auto model_s = pow(alpha / (h7 * x + h8 * y + 1), 3.0);
+    Eigen::Vector3d point(x, y, 1);
+    point = H * point; // normalizes and transforms the point to the normalized rectified projective plane
+    const auto model_s = pow(alpha / point(2), 3.0); // point(2) = h7 * x' + h8 * y' + 1, where (x', y') are normalized coordinates
     // scale-based residual: the deviation between the input scale and the model scale
     const auto r_scale = 1.0 - (s / model_s);
     // line induced by coordinates and orientation
@@ -350,10 +354,95 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     const auto d1 = line.dot(vp1);
     const auto d2 = line.dot(vp2);
     const auto r_orientation = (std::abs(d1) < std::abs(d2)) ? d1 : d2; 
-    // TODO currently it is only possible to return a scalar residual, so we
-    // are forced to return a mix of the two residuals, which loses the geometric
-    // meaning of each one.
-    return r_scale * r_orientation;
+    // TODO currently it is only possible to return a scalar residual
+    return r_scale;
+}
+
+bool normalizePoints(
+    const cv::Mat& data, // The data points
+    const size_t* sample, // The points to which the model will be fit
+    const size_t& sample_number,// The number of points
+    cv::Mat& normalized_features, // The normalized features
+    Eigen::Matrix3d& normalizing_transform // The normalizing transformation
+)
+{
+    if (sample_number < 1)
+    {
+        fprintf(stderr,
+            "Feature normalization failed because number of input features is zero.\n"
+        );
+        return false;
+    }
+    // helper function to fetch correct sample
+    auto get_sample_ptr = [sample, &data](size_t i) {
+        const auto *data_ptr = reinterpret_cast<double*>(data.data);
+        const size_t idx = (sample == nullptr) ? i : sample[i];
+        return data_ptr + idx * data.cols;
+    };
+    // compute mean position of features
+    double mean_x = 0.0;
+    double mean_y = 0.0;
+    for (size_t i = 0; i < sample_number; i++)
+    {
+        const auto* sample = get_sample_ptr(i);
+        mean_x += sample[0]; // x-coordinate
+        mean_y += sample[1]; // y-coordinate
+    }
+    const auto inv_n = 1.0 / static_cast<double>(sample_number);
+    mean_x *= inv_n;
+    mean_y *= inv_n;
+    // compute average Euclidean distance to mean position
+    double avg_dist = 0.0;
+    for (size_t i = 0; i < sample_number; i++)
+    {
+        const auto* sample = get_sample_ptr(i);
+        const auto dx = sample[0] - mean_x; // x-coordinate
+        const auto dy = sample[1] - mean_y; // y-coordinate
+        avg_dist += sqrt(dx * dx + dy * dy);
+    }
+    avg_dist *= inv_n;
+    if (avg_dist < Eps)
+    {
+        fprintf(stderr,
+            "Feature normalization failed because all features are located in the \
+            same position (near-zero average distance from mean position), or because \
+            the average distance came out negative. Average distance: %f\n",
+            avg_dist
+        );
+        return false;
+    }
+    // compute scaling factor to transform all feature positions to so that averge
+    // distance is sqrt(2).
+    const auto s = M_SQRT2 / avg_dist;
+    // compute normalized features - normalizing is relevant only for coordinates
+    // and scale as the scaling of feature positions about the origin is isotropic
+    auto* norm_features_ptr = reinterpret_cast<double*>(normalized_features.data);
+    for (size_t i = 0; i < sample_number; i++)
+    {
+        const auto* sample = get_sample_ptr(i);
+        const auto x = sample[0]; // x-coordinate
+        const auto y = sample[1]; // y-coordinate
+        const auto orientation = sample[2]; // orientation
+        const auto scale = sample[3]; // scale
+
+        *norm_features_ptr++ = s * (x - mean_x);
+        *norm_features_ptr++ = s * (y - mean_y);
+        *norm_features_ptr++ = orientation; // orientation is not affected by isotropic scaling
+        *norm_features_ptr++ = s * scale;
+        // ensures that if the dimension of the features is larger
+        // than 4, then the normalization will still succeed.
+        for (size_t i = 4; i < normalized_points_.cols; ++i)
+        {
+			*norm_features_ptr++ = sample[i];
+        }
+    }
+    // create the matrix expressing the normalizing transformation
+    const auto tx = -s * mean_x;
+    const auto ty = -s * mean_y;
+    normalizing_transform << s, 0, tx,
+                             0, s, ty,
+                             0, 0, 1;
+    return true;
 }
 
 }

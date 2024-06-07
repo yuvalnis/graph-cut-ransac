@@ -24,7 +24,7 @@ namespace gcransac::estimator
 template<
     class _MinimalSolverEngine, // The solver used for estimating the model from a minimal sample
     class _NonMinimalSolverEngine // The solver used for estimating the model from a non-minimal sample
-> class RectifyingHomographyEstimator : public Estimator<cv::Mat, Model>
+> class RectifyingHomographyEstimator : public Estimator<cv::Mat, RectifyingHomography>
 {
 protected:
     // Minimal solver engine used for estimating a model from a minimal sample
@@ -238,32 +238,46 @@ public:
         {
             return false;
         }
-        return non_minimal_solver->estimateModel(
-            data_, nullptr, sample_number_, *models_, weights_
+        // normalize features
+        cv::Mat normalized_features(
+            sample_number_, data_.cols, data_.type()
         );
-    }
-
-    double residual(const cv::Mat& feature_, const Eigen::MatrixXd& descriptor_) const
-    {
-        return _MinimalSolverEngine::residual(feature_, descriptor_);
+        Eigen::Matrix3d normalizing_transform;
+        bool success = _NonMinimalSolverEngine::normalizePoints(
+            data_, sample_, sample_number_, normalized_features,
+            normalizing_transform
+        );
+        if (!success)
+        {
+            return false;
+        }
+        // estimate model(s)
+        success = non_minimal_solver->estimateModel(
+            data_, sample_, sample_number_, *models_, weights_
+        );
+        if (!success)
+        {
+            return false;
+        }
+        // denormalize estimated model(s)
+        for (auto& model : *models_)
+        {
+            model.descriptor = model.descriptor * normalizing_transform;
+            model.denormalization_transform = normalizing_transform.inverse();
+        }
     }
 
     OLGA_INLINE double residual(const cv::Mat& feature_, const Model& model_) const
     {
-        return residual(feature_, model_.descriptor);
+        return _MinimalSolverEngine::residual(feature_, model_);
     }
 
-    OLGA_INLINE double squaredResidual(const cv::Mat& feature_,
-                                       const Eigen::MatrixXd& descriptor_) const
+    OLGA_INLINE double squaredResidual(
+        const cv::Mat& feature_,
+        const Model& model_
+    ) const
     {
-        const auto r = residual(feature_, descriptor_);
-        return r * r;
-    }
-
-    OLGA_INLINE double squaredResidual(const cv::Mat& feature_,
-                                      const Model& model_) const
-    {
-        const auto r = residual(feature_, model_.descriptor);
+        const auto r = residual(feature_, model_);
         return r * r;
     }
 };
