@@ -44,7 +44,7 @@ namespace gcransac
 		{
 			// This is the estimator class for estimating a homography matrix between two images. A model estimation method and error calculation method are implemented
 			template <size_t _DimensionNumber>
-			class LinearModelSolver : public SolverEngine
+			class LinearModelSolver : public SolverEngine<>
 			{
 			public:
 				LinearModelSolver()

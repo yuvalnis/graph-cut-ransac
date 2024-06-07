@@ -46,7 +46,7 @@ namespace gcransac
 		{
 			// This is the estimator class for estimating the essential matrix between two images from a larger-than-minimal
 			// sample using bundle adjustment. 
-			class FundamentalMatrixBundleAdjustmentSolver : public SolverEngine
+			class FundamentalMatrixBundleAdjustmentSolver : public SolverEngine<>
 			{
 			protected:
 				// The options for the bundle adjustment

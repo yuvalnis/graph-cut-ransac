@@ -45,7 +45,7 @@ namespace gcransac
 		namespace solver
 		{
 			// This is the estimator class for estimating a homography matrix between two images. A model estimation method and error calculation method are implemented
-			class FundamentalMatrixPlaneParallaxSolver : public SolverEngine
+			class FundamentalMatrixPlaneParallaxSolver : public SolverEngine<>
 			{
 			protected:
 				const Eigen::Matrix3d *homography;

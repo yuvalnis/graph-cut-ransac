@@ -45,12 +45,14 @@
 
 namespace gcransac
 {
-	template <class _ModelEstimator,
+	template <
+		class _ModelEstimator,
 		class _NeighborhoodGraph,
+		class _ModelType = Model,
 		class _ScoringFunction = MSACScoringFunction<_ModelEstimator>,
 		class _PreemptiveModelVerification = preemption::EmptyPreemptiveVerfication<_ModelEstimator>,
-		class _FastInlierSelector = inlier_selector::EmptyInlierSelector<_ModelEstimator, _NeighborhoodGraph>>
-		class GCRANSAC
+		class _FastInlierSelector = inlier_selector::EmptyInlierSelector<_ModelEstimator, _NeighborhoodGraph>
+	> class GCRANSAC
 	{
 	public:
 		utils::Settings settings;
@@ -72,7 +74,7 @@ namespace gcransac
 			sampler::Sampler<cv::Mat, size_t> *main_sampler_, // The main sampler is used outside the local optimization
 			sampler::Sampler<cv::Mat, size_t> *local_optimization_sampler_, // The local optimization sampler is used inside the local optimization
 			const _NeighborhoodGraph *neighborhood_graph_, // The initialized neighborhood graph
-			Model &obtained_model_, // The output model
+			_ModelType &obtained_model_, // The output model
 			_PreemptiveModelVerification &preemptive_verification_, // The preemptive verification strategy used
 			_FastInlierSelector &fast_inlier_selector_); // The fast inlier selector used
 
@@ -82,7 +84,7 @@ namespace gcransac
 			sampler::Sampler<cv::Mat, size_t> *main_sampler_, // The main sampler is used outside the local optimization
 			sampler::Sampler<cv::Mat, size_t> *local_optimization_sampler_, // The local optimization sampler is used inside the local optimization
 			const _NeighborhoodGraph *neighborhood_graph_, // The initialized neighborhood graph
-			Model &obtained_model_); // The output model
+			_ModelType &obtained_model_); // The output model
 
 		void setFPS(double fps_) { settings.desired_fps = fps_; time_limit = 1.0 / fps_; } // Set a desired FPS value
 
@@ -129,7 +131,7 @@ namespace gcransac
 		void labeling(const cv::Mat &points_, // The input data points
 			size_t neighbor_number_, // The neighbor number in the graph
 			const std::vector<std::vector<cv::DMatch>> &neighbors_, // The neighborhood
-			Model &model_, // The current model_
+			_ModelType &model_, // The current model_
 			_ModelEstimator estimator_, // The model estimator
 			double lambda_, // The weight for the spatial coherence term
 			double threshold_, // The threshold_ for the inlier-outlier decision
@@ -139,7 +141,7 @@ namespace gcransac
 		// Apply the graph-cut optimization for GC-RANSAC
 		bool graphCutLocalOptimization(const cv::Mat &points_, // The input data points
 			std::vector<size_t> &so_far_the_best_inliers_, // The input, than the resulting inlier set
-			Model &so_far_the_best_model_, // The current model
+			_ModelType &so_far_the_best_model_, // The current model
 			Score &so_far_the_best_score_, // The current score
 			const _ModelEstimator &estimator_, // The model estimator
 			const size_t trial_number_); // The max trial number
@@ -150,13 +152,13 @@ namespace gcransac
 			const _ModelEstimator &estimator_, // The model estimator
 			const double threshold_, // The inlier-outlier threshold
 			std::vector<size_t> &inliers_, // The resulting inlier set
-			Model &model_, // The estimated model
+			_ModelType &model_, // The estimated model
 			const bool use_weighting_ = true); // Use iteratively re-weighted least-squares
 	};
 
 	// Computes the desired iteration number for RANSAC w.r.t. to the current inlier number
-	template <class _ModelEstimator, class _NeighborhoodGraph, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
-	size_t GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::getIterationNumber(
+	template <class _ModelType, class _ModelEstimator, class _NeighborhoodGraph, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
+	size_t GCRANSAC<_ModelType, _ModelEstimator, _NeighborhoodGraph, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::getIterationNumber(
 		size_t inlier_number_,
 		size_t point_number_,
 		size_t sample_size_,
@@ -173,13 +175,13 @@ namespace gcransac
 	}
 
 	// The main method applying Graph-Cut RANSAC to the input data points
-	template <class _ModelEstimator, class _NeighborhoodGraph, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
-	void GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::run(const cv::Mat &points_,  // Data points
+	template <class _ModelEstimator, class _NeighborhoodGraph, class _ModelType, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
+	void GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ModelType, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::run(const cv::Mat &points_,  // Data points
 		const _ModelEstimator &estimator_, // The model estimator
 		sampler::Sampler<cv::Mat, size_t> *main_sampler_, // The main sampler is used outside the local optimization
 		sampler::Sampler<cv::Mat, size_t> *local_optimization_sampler_, // The local optimization sampler is used inside the local optimization
 		const _NeighborhoodGraph *neighborhood_graph_, // The initialized neighborhood graph
-		Model &obtained_model_) // The output model
+		_ModelType &obtained_model_) // The output model
 	{
 		// Instantiate the preemptive model verification strategy
 		_PreemptiveModelVerification preemptive_verification;
@@ -199,14 +201,14 @@ namespace gcransac
 	}
 
 	// The main method applying Graph-Cut RANSAC to the input data points_
-	template <class _ModelEstimator, class _NeighborhoodGraph, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
-	void GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::run(
+	template <class _ModelEstimator, class _NeighborhoodGraph, class _ModelType, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
+	void GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ModelType, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::run(
 		const cv::Mat &points_,  // Data points
 		const _ModelEstimator &estimator_, // The model estimator
 		sampler::Sampler<cv::Mat, size_t> *main_sampler_, // The main sampler is used outside the local optimization
 		sampler::Sampler<cv::Mat, size_t> *local_optimization_sampler_, // The local optimization sampler is used inside the local optimization
 		const _NeighborhoodGraph *neighborhood_graph_, // The initialized neighborhood graph
-		Model &obtained_model_,  // The output model 
+		_ModelType &obtained_model_,  // The output model 
 		_PreemptiveModelVerification &preemptive_verification_, // The preemptive verification strategy used
 		_FastInlierSelector &fast_inlier_selector_) // The fast inlier selector used
 	{
@@ -243,7 +245,7 @@ namespace gcransac
 
 		size_t inlier_container_offset = 0; // Index to show which inlier vector is currently in use
 		size_t inlier_container_idx; // The index of the currently tested inlier container
-		Model so_far_the_best_model; // The current so-far-the-best model parameters
+		_ModelType so_far_the_best_model; // The current so-far-the-best model parameters
 		Score current_score, // The score of the current model 
 			so_far_the_best_score; // The score of the current so-far-the-best model
 		std::vector<std::vector<size_t>> temp_inner_inliers(2); // The inliers of the current and previous best models 
@@ -264,7 +266,7 @@ namespace gcransac
 		start = std::chrono::system_clock::now();
 
 		// The model estimated from a minimal subset
-		std::vector<Model> models;
+		std::vector<_ModelType> models;
 		models.reserve(estimator_.maximumMinimalSolutions());
 		
 		// Variables used for the fast inlier selection if needed
@@ -559,7 +561,7 @@ namespace gcransac
 		bool iterative_refitting_applied = false;
 		if (settings.do_final_iterated_least_squares)
 		{
-			Model model = so_far_the_best_model; // The model which is re-estimated by iteratively re-weighted least-squares
+			_ModelType model = so_far_the_best_model; // The model which is re-estimated by iteratively re-weighted least-squares
 			bool success = iteratedLeastSquaresFitting(
 				points_, // The input data points
 				estimator_, // The model estimator
@@ -627,13 +629,13 @@ namespace gcransac
 		statistics.processing_time = elapsed_seconds.count();
 	}
 
-	template <class _ModelEstimator, class _NeighborhoodGraph, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
-	bool GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::iteratedLeastSquaresFitting(
+	template <class _ModelEstimator, class _NeighborhoodGraph, class _ModelType, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
+	bool GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ModelType, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::iteratedLeastSquaresFitting(
 		const cv::Mat &points_,
 		const _ModelEstimator &estimator_,
 		const double threshold_,
 		std::vector<size_t> &inliers_,
-		Model &model_,
+		_ModelType &model_,
 		const bool use_weighting_)
 	{
 		const size_t sample_size = estimator_.sampleSize(); // The minimal sample size
@@ -648,7 +650,7 @@ namespace gcransac
 		Score best_score; // The score of the best estimated model
 		while (++iterations < settings.max_least_squares_iterations)
 		{
-			std::vector<Model> models; // Estimated models
+			std::vector<_ModelType> models; // Estimated models
 
 			// Calculate the weights if iteratively re-weighted least-squares is used			
 			if (_ModelEstimator::isWeightingApplicable() && // The weighted is applied only if the model estimator can handles it, and
@@ -758,9 +760,9 @@ namespace gcransac
 		return iterations > 1;
 	}
 
-	template <class _ModelEstimator, class _NeighborhoodGraph, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
+	template <class _ModelType, class _ModelEstimator, class _NeighborhoodGraph, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
 	template <size_t _CalledFromLocalOptimization>
-	OLGA_INLINE bool GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::sample(
+	OLGA_INLINE bool GCRANSAC<_ModelType, _ModelEstimator, _NeighborhoodGraph, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::sample(
 		const std::vector<size_t> &pool_, // The pool if indices determining which point can be selected
 		size_t sample_number_,
 		size_t *sample_)
@@ -777,19 +779,19 @@ namespace gcransac
 				sample_number_); // The number of points to be selected
 	}
 
-	template <class _ModelEstimator, class _NeighborhoodGraph, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
-	bool GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::graphCutLocalOptimization(
+	template <class _ModelEstimator, class _NeighborhoodGraph, class _ModelType, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
+	bool GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ModelType, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::graphCutLocalOptimization(
 		const cv::Mat &points_,
 		std::vector<size_t> &so_far_the_best_inliers_,
-		Model &so_far_the_best_model_,
+		_ModelType &so_far_the_best_model_,
 		Score &so_far_the_best_score_,
 		const _ModelEstimator &estimator_,
 		const size_t trial_number_)
 	{
 		const auto &inlier_limit = estimator_.inlierLimit(); // Number of points used in the inner RANSAC
 		Score max_score = so_far_the_best_score_; // The current best score
-		Model best_model = so_far_the_best_model_; // The current best model
-		std::vector<Model> models; // The estimated models' parameters
+		_ModelType best_model = so_far_the_best_model_; // The current best model
+		std::vector<_ModelType> models; // The estimated models' parameters
 		std::vector<size_t> best_inliers, // Inliers of the best model
 			inliers,
 			tmp_inliers; // The inliers of the current model
@@ -910,12 +912,12 @@ namespace gcransac
 		return false;
 	}
 
-	template <class _ModelEstimator, class _NeighborhoodGraph, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
-	void GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::labeling(
+	template <class _ModelEstimator, class _NeighborhoodGraph, class _ModelType, class _ScoringFunction, class _PreemptiveModelVerification, class _FastInlierSelector>
+	void GCRANSAC<_ModelEstimator, _NeighborhoodGraph, _ModelType, _ScoringFunction, _PreemptiveModelVerification, _FastInlierSelector>::labeling(
 		const cv::Mat &points_,
 		size_t neighbor_number_,
 		const std::vector<std::vector<cv::DMatch>> &neighbors_,
-		Model &model_,
+		_ModelType &model_,
 		_ModelEstimator estimator_,
 		double lambda_,
 		double threshold_,

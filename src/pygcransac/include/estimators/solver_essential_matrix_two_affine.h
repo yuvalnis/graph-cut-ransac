@@ -43,7 +43,7 @@ namespace gcransac
 		namespace solver
 		{
 			// This is the estimator class for estimating a homography matrix between two images. A model estimation method and error calculation method are implemented
-			class EssentialMatrixTwoAffineSolver : public SolverEngine
+			class EssentialMatrixTwoAffineSolver : public SolverEngine<>
 			{
 			public:
 				EssentialMatrixTwoAffineSolver()

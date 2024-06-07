@@ -44,7 +44,7 @@ namespace gcransac
 		namespace solver
 		{
 			// This is the estimator class for estimating a homography matrix between two images. A model estimation method and error calculation method are implemented
-			class HomographyFourPointSolver : public SolverEngine
+			class HomographyFourPointSolver : public SolverEngine<>
 			{
 			public:
 				HomographyFourPointSolver()

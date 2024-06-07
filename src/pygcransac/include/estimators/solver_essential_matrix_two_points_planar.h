@@ -50,7 +50,7 @@ namespace gcransac
 			// This it the line-intersection-based solver from
 			// Choi, Sunglok, and Jong-Hwan Kim. "Fast and reliable minimal relative pose estimation under planar motion." 
 			// Image and Vision Computing 69 (2018): 103-112.
-			class EssentialMatrixTwoPointsPlanar : public SolverEngine
+			class EssentialMatrixTwoPointsPlanar : public SolverEngine<>
 			{
 			public:
 				EssentialMatrixTwoPointsPlanar()

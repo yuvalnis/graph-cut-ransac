@@ -204,6 +204,7 @@ int findLine2D_(
 
 		GCRANSAC<utils::Default2DLineEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::Default2DLineEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::Default2DLineEstimator>> gcransac;
 		gcransac.settings.threshold = threshold; // The inlier-outlier threshold
@@ -435,6 +436,7 @@ int find6DPose_(
 
 		GCRANSAC<utils::DefaultPnPEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::DefaultPnPEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::DefaultPnPEstimator>> gcransac;
 		gcransac.settings.threshold = threshold; // The inlier-outlier threshold
@@ -720,6 +722,7 @@ int findRigidTransform_(
 
 		GCRANSAC<utils::DefaultRigidTransformationEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::DefaultRigidTransformationEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::DefaultRigidTransformationEstimator>> gcransac;
 		gcransac.settings.threshold = threshold; // The inlier-outlier threshold
@@ -754,6 +757,7 @@ int findRigidTransform_(
 
 			GCRANSAC<utils::DefaultRigidTransformationEstimator,
 				AbstractNeighborhood,
+				Model,
 				MSACScoringFunction<utils::DefaultRigidTransformationEstimator>,
 				preemption::EmptyPreemptiveVerfication<utils::DefaultRigidTransformationEstimator>,
 				inlier_selector::SpacePartitioningRANSAC<utils::DefaultRigidTransformationEstimator, AbstractNeighborhood>> gcransac;
@@ -783,6 +787,7 @@ int findRigidTransform_(
 
 			GCRANSAC<utils::DefaultRigidTransformationEstimator,
 				AbstractNeighborhood,
+				Model,
 				MSACScoringFunction<utils::DefaultRigidTransformationEstimator>,
 				preemption::EmptyPreemptiveVerfication<utils::DefaultRigidTransformationEstimator>,
 				inlier_selector::EmptyInlierSelector<utils::DefaultRigidTransformationEstimator, AbstractNeighborhood>> gcransac;
@@ -1028,6 +1033,7 @@ int findFundamentalMatrix_(
 
 		GCRANSAC<utils::DefaultFundamentalMatrixEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::DefaultFundamentalMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::DefaultFundamentalMatrixEstimator>> gcransac;
 		gcransac.settings.threshold = threshold; // The inlier-outlier threshold
@@ -1339,6 +1345,7 @@ int findFundamentalMatrixAC_(
 
 		GCRANSAC<utils::ACBasedFundamentalMatrixEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::ACBasedFundamentalMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::ACBasedFundamentalMatrixEstimator>> gcransac;
 		gcransac.settings.threshold = threshold; // The inlier-outlier threshold
@@ -1637,6 +1644,7 @@ int findFundamentalMatrixSIFT_(
 
 		GCRANSAC<utils::SIFTBasedFundamentalMatrixEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::SIFTBasedFundamentalMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::SIFTBasedFundamentalMatrixEstimator>> gcransac;
 		gcransac.settings.threshold = threshold; // The inlier-outlier threshold
@@ -1961,6 +1969,7 @@ int findEssentialMatrix_(
 
 		GCRANSAC<utils::DefaultEssentialMatrixEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::DefaultEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::DefaultEssentialMatrixEstimator>> gcransac;
 		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
@@ -2302,6 +2311,7 @@ int findEssentialMatrixAC_(
 
 		GCRANSAC<utils::ACBasedEssentialMatrixEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::ACBasedEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::ACBasedEssentialMatrixEstimator>> gcransac;
 		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
@@ -2635,6 +2645,7 @@ int findEssentialMatrixSIFT_(
 
 		GCRANSAC<utils::SIFTBasedEssentialMatrixEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::SIFTBasedEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::SIFTBasedEssentialMatrixEstimator>> gcransac;
 		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
@@ -2972,6 +2983,7 @@ int findPlanarEssentialMatrix_(
 
 		GCRANSAC<utils::DefaultPlanarEssentialMatrixEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::DefaultPlanarEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::DefaultPlanarEssentialMatrixEstimator>> gcransac;
 		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
@@ -3322,6 +3334,7 @@ int findGravityEssentialMatrix_(
 
 		GCRANSAC<utils::DefaultGravityEssentialMatrixEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::DefaultGravityEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::DefaultGravityEssentialMatrixEstimator>> gcransac;
 		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
@@ -3644,6 +3657,7 @@ int findHomography_(
 
 			GCRANSAC<utils::DefaultHomographyEstimator,
 				AbstractNeighborhood,
+				Model,
 				MSACScoringFunction<utils::DefaultHomographyEstimator>,
 				preemption::SPRTPreemptiveVerfication<utils::DefaultHomographyEstimator>,
 				inlier_selector::SpacePartitioningRANSAC<utils::DefaultHomographyEstimator, AbstractNeighborhood>> gcransac;
@@ -3672,6 +3686,7 @@ int findHomography_(
 
 			GCRANSAC<utils::DefaultHomographyEstimator,
 				AbstractNeighborhood,
+				Model,
 				MSACScoringFunction<utils::DefaultHomographyEstimator>,
 				preemption::SPRTPreemptiveVerfication<utils::DefaultHomographyEstimator>,
 				inlier_selector::EmptyInlierSelector<utils::DefaultHomographyEstimator, AbstractNeighborhood>> gcransac;
@@ -3707,6 +3722,7 @@ int findHomography_(
 
 			GCRANSAC<utils::DefaultHomographyEstimator,
 				AbstractNeighborhood,
+				Model,
 				MSACScoringFunction<utils::DefaultHomographyEstimator>,
 				preemption::EmptyPreemptiveVerfication<utils::DefaultHomographyEstimator>,
 				inlier_selector::SpacePartitioningRANSAC<utils::DefaultHomographyEstimator, AbstractNeighborhood>> gcransac;
@@ -3735,6 +3751,7 @@ int findHomography_(
 
 			GCRANSAC<utils::DefaultHomographyEstimator,
 				AbstractNeighborhood,
+				Model,
 				MSACScoringFunction<utils::DefaultHomographyEstimator>,
 				preemption::EmptyPreemptiveVerfication<utils::DefaultHomographyEstimator>,
 				inlier_selector::EmptyInlierSelector<utils::DefaultHomographyEstimator, AbstractNeighborhood>> gcransac;
@@ -3965,6 +3982,7 @@ int findHomographyAC_(
 
 		GCRANSAC<utils::ACBasedHomographyEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::ACBasedHomographyEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::ACBasedHomographyEstimator>,
 			inlier_selector::EmptyInlierSelector<utils::ACBasedHomographyEstimator, AbstractNeighborhood>> gcransac;
@@ -3995,6 +4013,7 @@ int findHomographyAC_(
 
 		GCRANSAC<utils::ACBasedHomographyEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::ACBasedHomographyEstimator>,
 			preemption::EmptyPreemptiveVerfication<utils::ACBasedHomographyEstimator>,
 			inlier_selector::EmptyInlierSelector<utils::ACBasedHomographyEstimator, AbstractNeighborhood>> gcransac;
@@ -4225,6 +4244,7 @@ int findHomographySIFT_(
 
 		GCRANSAC<utils::SIFTBasedHomographyEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::SIFTBasedHomographyEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::SIFTBasedHomographyEstimator>,
 			inlier_selector::EmptyInlierSelector<utils::SIFTBasedHomographyEstimator, AbstractNeighborhood>> gcransac;
@@ -4255,6 +4275,7 @@ int findHomographySIFT_(
 
 		GCRANSAC<utils::SIFTBasedHomographyEstimator,
 			AbstractNeighborhood,
+			Model,
 			MSACScoringFunction<utils::SIFTBasedHomographyEstimator>,
 			preemption::EmptyPreemptiveVerfication<utils::SIFTBasedHomographyEstimator>,
 			inlier_selector::EmptyInlierSelector<utils::SIFTBasedHomographyEstimator, AbstractNeighborhood>> gcransac;
