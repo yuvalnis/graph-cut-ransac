@@ -796,6 +796,7 @@ void test2DLineFitting(
 
 	GCRANSAC<utils::Default2DLineEstimator,
 		neighborhood::GridNeighborhoodGraph<2>,
+		Model,
 		MSACScoringFunction<utils::Default2DLineEstimator>,
 		preemption::SPRTPreemptiveVerfication<utils::Default2DLineEstimator>> gcransac;
 	gcransac.settings.threshold = inlier_outlier_threshold_; // The inlier-outlier threshold
@@ -914,6 +915,7 @@ void testRigidTransformFitting(
 
 	GCRANSAC<utils::DefaultRigidTransformationEstimator,
 		neighborhood::FlannNeighborhoodGraph,
+		Model,
 		MSACScoringFunction<utils::DefaultRigidTransformationEstimator>,
 		preemption::EmptyPreemptiveVerfication<utils::DefaultRigidTransformationEstimator>> gcransac;
 	gcransac.settings.threshold = inlier_outlier_threshold_; // The inlier-outlier threshold
@@ -1045,6 +1047,7 @@ void testHomographyFitting(
 
 	GCRANSAC<utils::DefaultHomographyEstimator,
 		neighborhood::GridNeighborhoodGraph<4>,
+		Model,
 		MSACScoringFunction<utils::DefaultHomographyEstimator>,
 		preemption::EmptyPreemptiveVerfication<utils::DefaultHomographyEstimator>,
 		inlier_selector::SpacePartitioningRANSAC<utils::DefaultHomographyEstimator, neighborhood::GridNeighborhoodGraph<4>>> gcransac;
@@ -1225,6 +1228,7 @@ void testFundamentalMatrixFitting(
 
 	GCRANSAC<utils::DefaultFundamentalMatrixEstimator,
 		neighborhood::GridNeighborhoodGraph<4>,
+		Model,
 		MSACScoringFunction<utils::DefaultFundamentalMatrixEstimator>,
 		preemption::SPRTPreemptiveVerfication<utils::DefaultFundamentalMatrixEstimator>> gcransac;
 	gcransac.settings.threshold = inlier_outlier_threshold_ * max_image_diagonal; // The inlier-outlier threshold
@@ -1389,6 +1393,7 @@ void test6DPoseFitting(
 
 	GCRANSAC<utils::DefaultPnPEstimator,
 		neighborhood::FlannNeighborhoodGraph,
+		Model,
 		MSACScoringFunction<utils::DefaultPnPEstimator>,
 		preemption::SPRTPreemptiveVerfication<utils::DefaultPnPEstimator>> gcransac;
 	gcransac.settings.threshold = normalized_threshold; // The inlier-outlier threshold
@@ -1627,6 +1632,7 @@ void testEssentialMatrixFitting(
 
 	GCRANSAC<utils::DefaultEssentialMatrixEstimator,
 		neighborhood::GridNeighborhoodGraph<4>,
+		Model,
 		MSACScoringFunction<utils::DefaultEssentialMatrixEstimator>,
 		preemption::SPRTPreemptiveVerfication<utils::DefaultEssentialMatrixEstimator>> gcransac;
 	gcransac.setFPS(fps_); // Set the desired FPS (-1 means no limit)
