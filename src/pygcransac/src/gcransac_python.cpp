@@ -4412,7 +4412,7 @@ int findRectifyingHomographyScaleOnly_(
 	preemption::EmptyPreemptiveVerfication<Estimator> preemptive_verification;
 	inlier_selector::EmptyInlierSelector<Estimator, NeighborhoodGraph> inlier_selector(neighborhood_graph.get());
 
-	GCRANSAC<Estimator, NeighborhoodGraph> gcransac;
+	GCRANSAC<Estimator, NeighborhoodGraph, ScaleBasedRectifyingHomography> gcransac;
 	// TODO pass functions arguments to configure GC-RANSAC
 	// gcransac.settings.threshold = threshold;
 
@@ -4420,7 +4420,7 @@ int findRectifyingHomographyScaleOnly_(
 	// resulting in a segmentation flow.
 	gcransac.settings.do_local_optimization = false; 
 
-	Homography model;
+	ScaleBasedRectifyingHomography model;
 	gcransac.run(
 		sample_set, estimator, main_sampler.get(), &local_optimization_sampler,
 		neighborhood_graph.get(), model, preemptive_verification, inlier_selector
@@ -4537,7 +4537,7 @@ int findRectifyingHomographySIFT_(
     preemption::EmptyPreemptiveVerfication<Estimator> preemptive_verification;
 	inlier_selector::EmptyInlierSelector<Estimator, NeighborhoodGraph> inlier_selector(neighborhood_graph.get());
 
-	GCRANSAC<Estimator, NeighborhoodGraph> gcransac;
+	GCRANSAC<Estimator, NeighborhoodGraph, SIFTRectifyingHomography> gcransac;
 	// TODO pass functions arguments to configure GC-RANSAC
 	gcransac.settings.threshold = threshold;
 
@@ -4545,7 +4545,7 @@ int findRectifyingHomographySIFT_(
 	// resulting in a segmentation flow.
 	gcransac.settings.do_local_optimization = false; 
 
-	RectifyingHomography model;
+	SIFTRectifyingHomography model;
 	gcransac.run(
 		sample_set, estimator, main_sampler.get(), &local_optimization_sampler,
 		neighborhood_graph.get(), model, preemptive_verification, inlier_selector

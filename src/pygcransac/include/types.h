@@ -110,14 +110,16 @@ namespace gcransac
 		// The default estimator for rectifying homography fitting with 3 scale-only SIFT features
 		typedef estimator::RectifyingHomographyEstimator<
 			estimator::solver::RectifyingHomographyThreeSIFTSolver,
-			estimator::solver::RectifyingHomographyThreeSIFTSolver>
-			ScaleBasedRectifyingHomographyEstimator;
+			estimator::solver::RectifyingHomographyThreeSIFTSolver,
+			gcransac::ScaleBasedRectifyingHomography
+		> ScaleBasedRectifyingHomographyEstimator;
 
 		// The default estimator for rectifying homography fitting with 2 full (scale and orientation) SIFT features
 		typedef estimator::RectifyingHomographyEstimator<
 			estimator::solver::RectifyingHomographyTwoSIFTSolver,
-			estimator::solver::RectifyingHomographyTwoSIFTSolver>
-			SIFTBasedRectifyingHomographyEstimator;
+			estimator::solver::RectifyingHomographyTwoSIFTSolver,
+			gcransac::SIFTRectifyingHomography
+		> SIFTBasedRectifyingHomographyEstimator;
 
 		// The default estimator for essential matrix fitting
 		typedef estimator::EssentialMatrixEstimator<estimator::solver::EssentialMatrixFivePointNisterSolver, // The solver used for fitting a model to a minimal sample

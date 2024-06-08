@@ -75,6 +75,8 @@ namespace gcransac
 	class ScoringFunction
 	{
 	public:
+		typedef typename _ModelEstimator::Model Model;
+
 		ScoringFunction()
 		{
 
@@ -111,6 +113,8 @@ namespace gcransac
 		size_t verify_every_kth_point;
 
 	public:
+		typedef typename _ModelEstimator::Model Model;
+
 		MSACScoringFunction() : verify_every_kth_point(1)
 		{
 
@@ -154,9 +158,7 @@ namespace gcransac
 				for (int point_idx = 0; point_idx < point_number; point_idx += verify_every_kth_point)
 				{
 					// Calculate the point-to-model residual
-					squared_residual =
-						estimator_.squaredResidual(points_.row(point_idx),
-							model_.descriptor);
+					squared_residual = estimator_.squaredResidual(points_.row(point_idx), model_);
 
 					// If the residual is smaller than the threshold, store it as an inlier and
 					// increase the score.
@@ -190,8 +192,7 @@ namespace gcransac
 					{
 						// Calculate the point-to-model residual
 						squared_residual =
-							estimator_.squaredResidual(points_.row(point_idx),
-								model_.descriptor);
+							estimator_.squaredResidual(points_.row(point_idx), model_);
 
 						// If the residual is smaller than the threshold, store it as an inlier and
 						// increase the score.
@@ -237,6 +238,8 @@ namespace gcransac
 		class MAGSACScoringFunction : public ScoringFunction<_Estimator>
 	{
 	public:
+		typedef typename _Estimator::Model Model;
+
 		void initialize(const double squared_truncated_threshold_,
 			const size_t point_number_)
 		{

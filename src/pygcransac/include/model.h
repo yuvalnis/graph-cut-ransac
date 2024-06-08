@@ -40,128 +40,113 @@
 
 namespace gcransac
 {
-	class Model
+
+class Model
+{
+public:
+	Eigen::MatrixXd descriptor; // The descriptor of the current model
+	Model(const Eigen::MatrixXd &descriptor_) : descriptor(descriptor_) {}
+	Model() {}
+};
+
+class RigidTransformation : public Model
+{
+public:
+	RigidTransformation() : Model(Eigen::MatrixXd(4, 4)) {}
+	RigidTransformation(const RigidTransformation& other)
 	{
-	public:
-		Eigen::MatrixXd descriptor; // The descriptor of the current model
+		descriptor = other.descriptor;
+	}
+};
 
-		Model(const Eigen::MatrixXd &descriptor_) :
-			descriptor(descriptor_)
-		{
-
-		}
-
-		Model()
-		{
-
-		}
-	};
-
-	class RigidTransformation : public Model
+class Line2D : public Model
+{
+public:
+	Line2D() :
+		Model(Eigen::MatrixXd(3, 1))
+	{}
+	Line2D(const Line2D& other)
 	{
-	public:
-		RigidTransformation() :
-			Model(Eigen::MatrixXd(4, 4))
-		{}
-		RigidTransformation(const RigidTransformation& other)
-		{
-			descriptor = other.descriptor;
-		}
-	};
+		descriptor = other.descriptor;
+	}
+};
 
-	class Line2D : public Model
+class FundamentalMatrix : public Model
+{
+public:
+	FundamentalMatrix() :
+		Model(Eigen::MatrixXd(3, 3))
+	{}
+	FundamentalMatrix(const FundamentalMatrix& other)
 	{
-	public:
-		Line2D() :
-			Model(Eigen::MatrixXd(3, 1))
-		{}
-		Line2D(const Line2D& other)
-		{
-			descriptor = other.descriptor;
-		}
-	};
+		descriptor = other.descriptor;
+	}
+};
 
-	class FundamentalMatrix : public Model
+class EssentialMatrix : public Model
+{
+public:
+	EssentialMatrix() :
+		Model(Eigen::MatrixXd(3, 3))
+	{}
+	EssentialMatrix(const EssentialMatrix& other)
 	{
-	public:
-		FundamentalMatrix() :
-			Model(Eigen::MatrixXd(3, 3))
-		{}
-		FundamentalMatrix(const FundamentalMatrix& other)
-		{
-			descriptor = other.descriptor;
-		}
-	};
+		descriptor = other.descriptor;
+	}
+};
 
-	class EssentialMatrix : public Model
+class Pose6D : public Model
+{
+public:
+	Pose6D() :
+		Model(Eigen::MatrixXd(3, 4))
+	{}
+	Pose6D(const Pose6D& other_)
 	{
-	public:
-		EssentialMatrix() :
-			Model(Eigen::MatrixXd(3, 3))
-		{}
-		EssentialMatrix(const EssentialMatrix& other)
-		{
-			descriptor = other.descriptor;
-		}
-	};
+		descriptor = other_.descriptor;
+	}
+};
 
-	class Pose6D : public Model
+class Homography : public Model
+{
+public:
+	Homography() : Model(Eigen::MatrixXd(3, 3)) {}
+	Homography(const Homography& other)
 	{
-	public:
-		Pose6D() :
-			Model(Eigen::MatrixXd(3, 4))
-		{}
-		Pose6D(const Pose6D& other_)
-		{
-			descriptor = other_.descriptor;
-		}
-	};
+		descriptor = other.descriptor;
+	}
+};
 
-	class Homography : public Model
+class RadialHomography : public Model
+{
+public:
+	RadialHomography() :
+		Model(Eigen::MatrixXd(3, 7))
+	{}
+
+	RadialHomography(const RadialHomography& other)
 	{
-	public:
-		Homography() :
-			Model(Eigen::MatrixXd(3, 3))
-		{}
+		descriptor = other.descriptor;
+	}
+};
 
-		Homography(const Homography& other)
-		{
-			descriptor = other.descriptor;
-		}
-	};
+class ScaleBasedRectifyingHomography : public Homography
+{
+public:
+	Eigen::Matrix3d denormalization_transform; // kept separately from descriptor for residual calculation
+	double alpha; // kept only for residual calculation
+	ScaleBasedRectifyingHomography() : 
+		Homography(), denormalization_transform(Eigen::Matrix3d()), alpha(0) {}
+};
 
-	class RadialHomography : public Model
-	{
-	public:
-		RadialHomography() :
-			Model(Eigen::MatrixXd(3, 7))
-		{}
+class SIFTRectifyingHomography : public ScaleBasedRectifyingHomography
+{
+public:
+	SIFTRectifyingHomography() : ScaleBasedRectifyingHomography(), 
+		vp1(Eigen::Vector3d(0)), vp2(Eigen::Vector3d(0)) {}
 
-		RadialHomography(const RadialHomography& other)
-		{
-			descriptor = other.descriptor;
-		}
-	};
+	Eigen::Vector3d vp1; // vanishing point in the original image used to estimate model
+	Eigen::Vector3d vp2; // vanishing point in the original image orthogonal (in the rectified image) to the first
+};
 
-	class RectifyingHomography : public Model
-	{
-	public:
-		RectifyingHomography() : Model(Eigen::MatrixXd(3, 3))
-		{
-			denormalization_transform = Eigen::Matrix3d();
-			alpha = 0.0;
-		}
-
-		RectifyingHomography(const RectifyingHomography& other)
-		{
-			descriptor = other.descriptor;
-			denormalization_transform = other.denormalization_transform;
-			alpha = other.alpha;
-		}
-
-		Eigen::Matrix3d denormalization_transform; // kept separately from descriptor for residual calculation
-		double alpha; // kept only for residual calculation
-		Eigen::Vector3d vp1; // vanishing point in the original image used to estimate model
-		Eigen::Vector3d vp2; // vanishing point in the original image orthogonal (in the rectified image) to the first
-	};
 }

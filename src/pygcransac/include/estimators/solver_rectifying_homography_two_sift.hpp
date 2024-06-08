@@ -6,11 +6,8 @@
 namespace gcransac::estimator::solver
 {
 
-constexpr double Eps = 1e-9;
-
-class RectifyingHomographyTwoSIFTSolver : public SolverEngine<RectifyingHomography>
+class RectifyingHomographyTwoSIFTSolver : public SolverEngine<SIFTRectifyingHomography>
 {
-
 public:
     RectifyingHomographyTwoSIFTSolver() {}
     ~RectifyingHomographyTwoSIFTSolver() {}
@@ -49,28 +46,32 @@ public:
         const cv::Mat& data_,
         const size_t *sample_,
         size_t sample_number_,
-        std::vector<Model> &models_,
+        std::vector<SIFTRectifyingHomography> &models_,
         const double *weights_ = nullptr
     ) const;
 
     static double residual(
         const cv::Mat& feature,
-        const Eigen::MatrixXd& descriptor
+        const SIFTRectifyingHomography& model
     );
-    static bool normalizePoints(
+
+    bool normalizePoints(
         const cv::Mat& data,
         const size_t* sample,
         const size_t& sample_number,
         cv::Mat& normalized_features,
         Eigen::Matrix3d& normalizing_transform
-    );
+    ) const;
 
 protected:
+    static constexpr double kScalePower = -1.0 / 3.0;
+    static constexpr double kEpsilon = 1e-9;
+
     bool estimateNonMinimalModel(
         const cv::Mat &data_,
         const size_t *sample_,
         size_t sample_number_,
-        std::vector<Model> &models_,
+        std::vector<SIFTRectifyingHomography> &models_,
         const double *weights_
     ) const;
 
@@ -78,7 +79,7 @@ protected:
         const cv::Mat &data_,
         const size_t *sample_,
         size_t sample_number_,
-        std::vector<Model> &models_
+        std::vector<SIFTRectifyingHomography> &models_
     ) const;
 };
 
@@ -89,36 +90,41 @@ void lineFromSIFT(double x, double y, double theta, Eigen::Vector3d& line)
     line = Eigen::Vector3d(s, -c, y * c - x * s);
 }
 
-// void orthogonalVanishingPoint(
-//     const Eigen::Vector3d& vp,
-//     const Eigen::Matrix3d& H,
-//     Eigen::Vector3d& result
-// )
-// {
-//     const Eigen::Vector3d z_hat(0.0, 0.0, 1.0);
-//     const Eigen::Vector3d vp_rect = H * vp;
-//     if (std::abs(vp_rect(2)) > Eps)
-//     {
-//         fprintf(
-//             stderr,
-//             "Rectified vanishing point should be at infinity 
-//             (homogeneous coordinate should be zero, but instead its 
-//             value is %f). \n",
-//             vp_rect(2)
-//         );
-//     }
-//     vp_rect(2) = 0.0; // zero-out homogeneous coordinate to receive expect result
-//     result = H.inverse() * vp_rect.cross(z_hat);
-// }
+void orthogonalVanishingPoint(
+    const Eigen::Vector3d& vp,
+    const Eigen::Matrix3d& H,
+    Eigen::Vector3d& result
+)
+{
+    constexpr double kEpsilon = 1e-9;
+    
+    static const Eigen::Vector3d z_hat(0.0, 0.0, 1.0);
+    Eigen::Vector3d vp_rect = H * vp;
+    if (std::abs(vp_rect(2)) > kEpsilon)
+    {
+        fprintf(
+            stderr,
+            "Rectified vanishing point should be at infinity \
+            (homogeneous coordinate should be zero, but instead its \
+            value is %f).\n",
+            vp_rect(2)
+        );
+    }
+    vp_rect(2) = 0.0; // zero-out homogeneous coordinate to receive expect result
+    result = H.inverse() * vp_rect.cross(z_hat);
+    if (std::abs(result(2)) > kEpsilon)
+    {
+        result /= result(2);
+    }
+}
 
 bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     const cv::Mat &data_,
     const size_t *sample_,
     size_t sample_number_,
-    std::vector<Model> &models_
+    std::vector<SIFTRectifyingHomography> &models_
 ) const
 {
-    constexpr double kScalePower = -1.0 / 3.0;
     // helper function to fetch correct sample
     auto get_sample_ptr = [sample_, &data_](size_t i) {
         const auto *data_ptr = reinterpret_cast<double*>(data_.data);
@@ -169,7 +175,7 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     Eigen::Vector3d l2;
     lineFromSIFT(x2, y2, t2, l2);
     auto vp = l1.cross(l2); // intersection of lines
-    if (std::abs(vp(2)) > Eps)
+    if (std::abs(vp(2)) > kEpsilon)
     {
         vp /= vp(2);
     }
@@ -188,12 +194,13 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     // construct model
     const auto h7 = x(0);
     const auto h8 = x(1);
-    Homography model;
-    model.descriptor << 1, 0, 0
+    SIFTRectifyingHomography model;
+    model.descriptor << 1, 0, 0,
                         0, 1, 0,
                         h7, h8, 1;
     model.alpha = x(2);
-    // TODO update vanishing points in model
+    model.vp1 = vp;
+    orthogonalVanishingPoint(model.vp1, model.descriptor, model.vp2);
     models_.emplace_back(model);
     return true;
 }
@@ -202,11 +209,10 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     const cv::Mat &data_,
     const size_t *sample_,
     size_t sample_number_,
-    std::vector<Model> &models_,
+    std::vector<SIFTRectifyingHomography> &models_,
     const double *weights_
 ) const
 {
-    constexpr double kScalePower = -1.0 / 3.0;
     // helper function to fetch correct sample
     auto get_sample_ptr = [sample_, &data_](size_t i) {
         const auto *data_ptr = reinterpret_cast<double*>(data_.data);
@@ -242,23 +248,21 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     for (size_t i = 0; i < sample_number_ - 1; ++i)
     {
         const auto* sample_i = get_sample_ptr(i); // first sample
-        const auto xi = sample_i[0]; // first x-coordinate
-        const auto yi = sample_i[1]; // first y-coordinate
-        const auto ti = sample_i[2];
-        const auto si = sample_i[3]; // first scale
+        const auto xi = sample_i[0]; // i-th x-coordinate
+        const auto yi = sample_i[1]; // i-th y-coordinate
+        const auto ti = sample_i[2]; // i-th orientation
         lineFromSIFT(xi, yi, ti, li);
 
         for (size_t j = i + 1; j < sample_number_; ++j)
         {
             const auto* sample_j = get_sample_ptr(j); // first sample
-            const auto xj = sample_j[0]; // first x-coordinate
-            const auto yj = sample_j[1]; // first y-coordinate
-            const auto tj = sample_j[2];
-            const auto sj = sample_j[3]; // first scale
+            const auto xj = sample_j[0]; // j-th x-coordinate
+            const auto yj = sample_j[1]; // j-th y-coordinate
+            const auto tj = sample_j[2]; // j-th orientation
 
             lineFromSIFT(xj, yj, tj, lj);
             auto vp = li.cross(lj); // intersection of lines
-            if (std::abs(vp(2)) > Eps)
+            if (std::abs(vp(2)) > kEpsilon)
             {
                 vp /= vp(2);
             }
@@ -282,8 +286,8 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     // construct model
     const auto h7 = x(0);
     const auto h8 = x(1);
-    Homography model;
-    model.descriptor << 1, 0, 0
+    SIFTRectifyingHomography model;
+    model.descriptor << 1, 0, 0,
                         0, 1, 0,
                         h7, h8, 1;
     model.alpha = x(2);
@@ -296,7 +300,7 @@ bool RectifyingHomographyTwoSIFTSolver::estimateModel(
     const cv::Mat& data_,
     const size_t *sample_,
     size_t sample_number_,
-    std::vector<Model> &models_,
+    std::vector<SIFTRectifyingHomography> &models_,
     const double *weights_
 ) const
 {
@@ -318,18 +322,9 @@ bool RectifyingHomographyTwoSIFTSolver::estimateModel(
 
 double RectifyingHomographyTwoSIFTSolver::residual(
     const cv::Mat& feature,
-    const RectifyingHomography& model
+    const SIFTRectifyingHomography& model
 )
 {
-    if (descriptor.rows() != 1 || descriptor.cols() != 9)
-    {
-        std::stringstream error_msg;
-        error_msg << "Expected a 1x9 matrix as a descriptor. " 
-                  << "Received the following " << descriptor.rows() << "x"
-                  << descriptor.cols() << " matrix instead:\n" << descriptor 
-                  << "\n";
-        throw std::runtime_error(error_msg.str());
-    }
     const auto& H = model.descriptor;
     const auto alpha = model.alpha;
     const auto& vp1 = model.vp1;
@@ -358,13 +353,13 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     return r_scale;
 }
 
-bool normalizePoints(
+bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
     const cv::Mat& data, // The data points
     const size_t* sample, // The points to which the model will be fit
     const size_t& sample_number,// The number of points
     cv::Mat& normalized_features, // The normalized features
     Eigen::Matrix3d& normalizing_transform // The normalizing transformation
-)
+) const
 {
     if (sample_number < 1)
     {
@@ -401,7 +396,7 @@ bool normalizePoints(
         avg_dist += sqrt(dx * dx + dy * dy);
     }
     avg_dist *= inv_n;
-    if (avg_dist < Eps)
+    if (avg_dist < kEpsilon)
     {
         fprintf(stderr,
             "Feature normalization failed because all features are located in the \
@@ -431,7 +426,7 @@ bool normalizePoints(
         *norm_features_ptr++ = s * scale;
         // ensures that if the dimension of the features is larger
         // than 4, then the normalization will still succeed.
-        for (size_t i = 4; i < normalized_points_.cols; ++i)
+        for (size_t i = 4; i < normalized_features.cols; ++i)
         {
 			*norm_features_ptr++ = sample[i];
         }
