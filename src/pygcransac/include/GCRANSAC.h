@@ -671,23 +671,29 @@ namespace gcransac
 				}
 
 				// Estimate the model from the current inlier set
-				estimator_.estimateModelNonminimal(points_,
-					&(inliers_)[0], // The current inliers
+				estimator_.estimateModelNonminimal(
+					points_,
+					inliers_.data(), // The current inliers
 					inliers_.size(), // The number of inliers
 					&models, // The estimated model parameters
-					weights.get()); // The weights used in the weighted least-squares fitting
+					weights.get() // The weights used in the weighted least-squares fitting
+				);
 
 				// Setting the weights back to 0.
-				for (const size_t &inlier_idx : inliers_)
+				for (const size_t& inlier_idx : inliers_)
+				{
 					weights[inlier_idx] = 0;
+				}
 			}
 			else
 			{
 				// Estimate the model from the current inlier set
-				estimator_.estimateModelNonminimal(points_,
-					&(inliers_)[0], // The current inliers
+				estimator_.estimateModelNonminimal(
+					points_,
+					inliers_.data(), // The current inliers
 					inliers_.size(), // The number of inliers
-					&models); // The estimated model parameters
+					&models  // The estimated model parameters
+				);
 			}
 
 			if (models.size() == 0) // If there is no model estimated, interrupt the procedure

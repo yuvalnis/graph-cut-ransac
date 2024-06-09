@@ -116,6 +116,10 @@ void orthogonalVanishingPoint(
     {
         result /= result(2);
     }
+    else
+    {
+        result(2) = 0; // zero-out very small homogeneous coordinate of vanishing point
+    }
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
@@ -206,11 +210,11 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
-    const cv::Mat &data_,
-    const size_t *sample_,
+    const cv::Mat& data_,
+    const size_t* sample_,
     size_t sample_number_,
-    std::vector<SIFTRectifyingHomography> &models_,
-    const double *weights_
+    std::vector<SIFTRectifyingHomography>& models_,
+    const double* weights_
 ) const
 {
     // helper function to fetch correct sample
@@ -292,13 +296,15 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
                         h7, h8, 1;
     model.alpha = x(2);
     // TODO update vanishing points in model
+    model.vp1 << 0, 0, 0;
+    model.vp2 << 0, 0, 0;
     models_.emplace_back(model);
     return true;
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateModel(
     const cv::Mat& data_,
-    const size_t *sample_,
+    const size_t* sample_,
     size_t sample_number_,
     std::vector<SIFTRectifyingHomography> &models_,
     const double *weights_

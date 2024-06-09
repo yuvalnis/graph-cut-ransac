@@ -143,7 +143,7 @@ class SIFTRectifyingHomography : public ScaleBasedRectifyingHomography
 {
 public:
 	SIFTRectifyingHomography() : ScaleBasedRectifyingHomography(), 
-		vp1(Eigen::Vector3d(0)), vp2(Eigen::Vector3d(0)) {}
+		vp1(Eigen::Vector3d()), vp2(Eigen::Vector3d()) {}
 
 	Eigen::Vector3d vp1; // vanishing point in the original image used to estimate model
 	Eigen::Vector3d vp2; // vanishing point in the original image orthogonal (in the rectified image) to the first

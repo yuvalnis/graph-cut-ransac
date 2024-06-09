@@ -191,10 +191,10 @@ bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
 
 bool RectifyingHomographyThreeSIFTSolver::estimateModel(
     const cv::Mat& data_, // The set of data points
-    const size_t *sample_, // The sample used for the estimation
+    const size_t* sample_, // The sample used for the estimation
     size_t sample_number_, // The size of the sample
-    std::vector<ScaleBasedRectifyingHomography> &models_, // The estimated model parameters
-    const double *weights_ // The weight for each point
+    std::vector<ScaleBasedRectifyingHomography>& models_, // The estimated model parameters
+    const double* weights_ // The weight for each point
 ) const
 {
     if (sample_number_ < sampleSize())

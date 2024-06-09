@@ -6,11 +6,7 @@
 #include <cmath>
 #include <random>
 #include <vector>
-#include <sstream>
-
-#include <unsupported/Eigen/Polynomials>
 #include <Eigen/Eigen>
-
 #include "estimator.h"
 #include "model.h"
 
@@ -94,7 +90,7 @@ public:
     // Estimating the model from a minimal sample
     OLGA_INLINE bool estimateModel(
         const cv::Mat& data_, // The data points
-        const size_t *sample_, // The sample usd for the estimation
+        const size_t* sample_, // The sample usd for the estimation
         std::vector<_ModelType>* models_ // The estimated model parameters
     ) const
     {
@@ -109,8 +105,8 @@ public:
     // Estimating the model from a non-minimal sample
     OLGA_INLINE bool estimateModelNonminimal(
         const cv::Mat& data_, // The data points
-        const size_t *sample_, // The sample used for the estimation
-        const size_t &sample_number_, // The size of a minimal sample
+        const size_t* sample_, // The sample used for the estimation
+        const size_t& sample_number_, // The size of a minimal sample
         std::vector<_ModelType>* models_,
         const double *weights_ = nullptr // The estimated model parameters
     ) const
@@ -134,18 +130,18 @@ public:
         }
         // estimate model(s)
         success = non_minimal_solver->estimateModel(
-            data_, sample_, sample_number_, *models_, weights_
+            normalized_features, nullptr, sample_number_, *models_, weights_
         );
         if (!success)
         {
             return false;
         }
-        // denormalize estimated model(s)
         for (auto& model : *models_)
         {
             model.descriptor = model.descriptor * normalizing_transform;
             model.denormalization_transform = normalizing_transform.inverse();
         }
+        return true;
     }
 
     OLGA_INLINE double residual(
