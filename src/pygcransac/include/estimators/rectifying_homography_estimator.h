@@ -94,12 +94,22 @@ public:
         std::vector<_ModelType>* models_ // The estimated model parameters
     ) const
     {
-        return minimal_solver->estimateModel(
+        bool success = minimal_solver->estimateModel(
             data_,
             sample_,
             sampleSize(),
             *models_
         );
+        if (success)
+        {   
+            // since the minimal solution does not involve normaliation,
+            // set the denormalization transform to the identity matrix.
+            for (auto& model : *models_)
+            {
+                model.denormalization_transform = Eigen::Matrix3d::Identity();
+            }
+        }
+        return success;
     }
 
     // Estimating the model from a non-minimal sample

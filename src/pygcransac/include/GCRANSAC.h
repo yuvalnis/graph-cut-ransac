@@ -582,7 +582,7 @@ namespace gcransac
 				if (so_far_the_best_score < current_score)
 				{
 					iterative_refitting_applied = true;
-					so_far_the_best_model.descriptor = model.descriptor;
+					so_far_the_best_model = model;
 					inlier_container_offset = inlier_container_idx;
 				}
 			}
@@ -610,13 +610,13 @@ namespace gcransac
 
 				if (so_far_the_best_score < current_score)
 				{
-					so_far_the_best_model.descriptor = model.descriptor;
+					so_far_the_best_model = model;
 					inlier_container_offset = inlier_container_idx;
 				}
 			}
 
 			if (models.size() == 0)
-				so_far_the_best_model.descriptor = models[0].descriptor;
+				so_far_the_best_model = models[0]; // TODO won't this cause a segfault?
 		}
 
 		// Return the inlier set and the estimated model parameters
