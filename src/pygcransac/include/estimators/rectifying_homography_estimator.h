@@ -94,22 +94,34 @@ public:
         std::vector<_ModelType>* models_ // The estimated model parameters
     ) const
     {
-        bool success = minimal_solver->estimateModel(
-            data_,
-            sample_,
-            sampleSize(),
-            *models_
+        // normalize features
+        cv::Mat normalized_features(
+            sampleSize(), data_.cols, data_.type()
         );
-        if (success)
-        {   
-            // since the minimal solution does not involve normaliation,
-            // set the denormalization transform to the identity matrix.
-            for (auto& model : *models_)
-            {
-                model.denormalization_transform = Eigen::Matrix3d::Identity();
-            }
+        Eigen::Matrix3d normalizing_transform;
+        Eigen::Matrix3d denormalizing_transform;
+        bool success = minimal_solver->normalizePoints(
+            data_, sample_, sampleSize(), normalized_features,
+            normalizing_transform, denormalizing_transform
+        );
+        if (!success)
+        {
+            return false;
         }
-        return success;
+        // estimate model(s)
+        success = minimal_solver->estimateModel(
+            normalized_features, sample_, sampleSize(), *models_, nullptr
+        );
+        if (!success)
+        {
+            return false;
+        }
+        for (auto& model : *models_)
+        {
+            model.descriptor = model.descriptor * normalizing_transform;
+            model.denormalizing_transform = denormalizing_transform;
+        }
+        return true;
     }
 
     // Estimating the model from a non-minimal sample
@@ -130,9 +142,10 @@ public:
             sample_number_, data_.cols, data_.type()
         );
         Eigen::Matrix3d normalizing_transform;
+        Eigen::Matrix3d denormalizing_transform;
         bool success = non_minimal_solver->normalizePoints(
             data_, sample_, sample_number_, normalized_features,
-            normalizing_transform
+            normalizing_transform, denormalizing_transform
         );
         if (!success)
         {
@@ -140,7 +153,7 @@ public:
         }
         // estimate model(s)
         success = non_minimal_solver->estimateModel(
-            normalized_features, nullptr, sample_number_, *models_, weights_
+            normalized_features, sample_, sample_number_, *models_, weights_
         );
         if (!success)
         {
@@ -149,7 +162,7 @@ public:
         for (auto& model : *models_)
         {
             model.descriptor = model.descriptor * normalizing_transform;
-            model.denormalization_transform = normalizing_transform.inverse();
+            model.denormalizing_transform = denormalizing_transform;
         }
         return true;
     }

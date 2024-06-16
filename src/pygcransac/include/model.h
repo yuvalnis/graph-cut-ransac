@@ -133,10 +133,10 @@ public:
 class ScaleBasedRectifyingHomography : public Homography
 {
 public:
-	Eigen::Matrix3d denormalization_transform; // kept separately from descriptor for residual calculation
+	Eigen::Matrix3d denormalizing_transform; // kept separately from descriptor for residual calculation
 	double alpha; // kept only for residual calculation
 	ScaleBasedRectifyingHomography() : 
-		Homography(), denormalization_transform(Eigen::Matrix3d()), alpha(0) {}
+		Homography(), denormalizing_transform(Eigen::Matrix3d()), alpha(0) {}
 };
 
 class SIFTRectifyingHomography : public ScaleBasedRectifyingHomography

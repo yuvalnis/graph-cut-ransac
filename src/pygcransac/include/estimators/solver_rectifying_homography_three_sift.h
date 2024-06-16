@@ -59,7 +59,8 @@ public:
         const size_t* sample,
         const size_t& sample_number,
         cv::Mat& normalized_features,
-        Eigen::Matrix3d& normalizing_transform
+        Eigen::Matrix3d& normalizing_transform,
+        Eigen::Matrix3d& denormalizing_transform
     ) const;
 
 protected:
@@ -218,9 +219,11 @@ double RectifyingHomographyThreeSIFTSolver::residual(
     const ScaleBasedRectifyingHomography& model
 )
 {
+    // Homography includes transformation into normalized image coordinate system
     const auto& H = model.descriptor;
+    // Normalized model: parameters are in the normalized image coordinate system
     const auto alpha = model.alpha;
-
+    // Unnormalized feature: parameters are in the unnormalized input image coordinate system
     const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
     const auto& x = feature_ptr[0];
     const auto& y = feature_ptr[1];
@@ -228,9 +231,10 @@ double RectifyingHomographyThreeSIFTSolver::residual(
     // the scale change which fits the model
     Eigen::Vector3d point(x, y, 1);
     point = H * point; // normalizes and transforms the point to the normalized rectified projective plane
+    // TODO model_s is in the normalized space but s in in the unnormalized space
     const auto model_s = pow(alpha / point(2), 3.0); // point(2) = h7 * x' + h8 * y' + 1, where (x', y') are normalized coordinates
     // scale-based residual: the deviation between the input scale and the model scale
-    const auto r_scale = 1.0 - (s / model_s);
+    const auto r_scale = std::abs(1.0 - (s / model_s));
     
     return r_scale;
 }
@@ -240,7 +244,8 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     const size_t* sample, // The points to which the model will be fit
     const size_t& sample_number,// The number of points
     cv::Mat& normalized_features, // The normalized features
-    Eigen::Matrix3d& normalizing_transform // The normalizing transformation
+    Eigen::Matrix3d& normalizing_transform, // The normalizing transformation
+    Eigen::Matrix3d& denormalizing_transform // The denormalizing transformation (inverse of the normalizing transformation)
 ) const
 {
     if (sample_number < 1)
@@ -311,12 +316,24 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
 			*norm_features_ptr++ = sample[i];
         }
     }
-    // create the matrix expressing the normalizing transformation
-    const auto tx = -s * mean_x;
-    const auto ty = -s * mean_y;
-    normalizing_transform << s, 0, tx,
-                             0, s, ty,
+    // create the matrices expressing the normalizing and denormalizing transformations
+    const auto tx = -mean_x;
+    const auto ty = -mean_y;
+    normalizing_transform << s, 0, s * tx,
+                             0, s, s * ty,
                              0, 0, 1;
+    const auto inv_s = 1.0 / s;
+    denormalizing_transform << inv_s, 0,     -tx,
+                               0,     inv_s, -ty,
+                               0,     0,     1;
+    if (!denormalizing_transform.isApprox(normalizing_transform.inverse())) {
+        fprintf(
+            stderr, 
+            "ERROR: Denormalizing transform is not the inverse of the \
+            normalizing transform.\n"
+        );
+        return false;
+    }
     return true;
 }
 

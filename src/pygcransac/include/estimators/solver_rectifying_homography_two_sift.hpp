@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include "solver_engine.h"
 #include "math_utils.h"
 
@@ -60,7 +61,8 @@ public:
         const size_t* sample,
         const size_t& sample_number,
         cv::Mat& normalized_features,
-        Eigen::Matrix3d& normalizing_transform
+        Eigen::Matrix3d& normalizing_transform,
+        Eigen::Matrix3d& denormalizing_transform
     ) const;
 
 protected:
@@ -90,7 +92,7 @@ void lineFromSIFT(double x, double y, double theta, Eigen::Vector3d& line)
     line = Eigen::Vector3d(s, -c, y * c - x * s);
 }
 
-void orthogonalVanishingPoint(
+bool orthogonalVanishingPoint(
     const Eigen::Vector3d& vp,
     const Eigen::Matrix3d& H,
     Eigen::Vector3d& result
@@ -98,28 +100,29 @@ void orthogonalVanishingPoint(
 {
     constexpr double kEpsilon = 1e-9;
     
-    static const Eigen::Vector3d z_hat(0.0, 0.0, 1.0);
     Eigen::Vector3d vp_rect = H * vp;
     if (std::abs(vp_rect(2)) > kEpsilon)
     {
         fprintf(
             stderr,
-            "Rectified vanishing point should be at infinity \
-            (homogeneous coordinate should be zero, but instead its \
-            value is %f).\n",
+            "Rectified vanishing point should be at infinity (homogeneous coordinate should be zero, but instead its value is %f).\n",
             vp_rect(2)
         );
+        return false;
     }
-    vp_rect(2) = 0.0; // zero-out homogeneous coordinate to receive expect result
-    result = H.inverse() * vp_rect.cross(z_hat);
+    result(0) = vp_rect(1); // x <-- y
+    result(1) = -vp_rect(0); // y <-- -x
+    result(2) = 0.0;
+    result = H.inverse() * result;
     if (std::abs(result(2)) > kEpsilon)
     {
         result /= result(2);
     }
     else
     {
-        result(2) = 0; // zero-out very small homogeneous coordinate of vanishing point
+        result(2) = 0.0; // zero-out very small homogeneous coordinate of vanishing point
     }
+    return true;
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
@@ -204,7 +207,10 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
                         h7, h8, 1;
     model.alpha = x(2);
     model.vp1 = vp;
-    orthogonalVanishingPoint(model.vp1, model.descriptor, model.vp2);
+    if (!orthogonalVanishingPoint(model.vp1, model.descriptor, model.vp2))
+    {
+        return false;
+    }
     models_.emplace_back(model);
     return true;
 }
@@ -284,7 +290,7 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     // verify validity of solution
     if (x.hasNaN())
     {
-        fprintf(stderr, "Invalid solution for the non-minimal model");
+        fprintf(stderr, "Invalid solution for the non-minimal model\n");
         return false;
     }
     // construct model
@@ -331,11 +337,13 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     const SIFTRectifyingHomography& model
 )
 {
+    // Homography includes transformation into normalized image coordinate system
     const auto& H = model.descriptor;
+    // Normalized model: parameters are in the normalized image coordinate system
     const auto alpha = model.alpha;
     const auto& vp1 = model.vp1;
     const auto& vp2 = model.vp2;
-
+    // Unnormalized feature: parameters are in the unnormalized input image coordinate system
     const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
     const auto& x = feature_ptr[0];
     const auto& y = feature_ptr[1];
@@ -344,17 +352,20 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     // the scale change which fits the model
     Eigen::Vector3d point(x, y, 1);
     point = H * point; // normalizes and transforms the point to the normalized rectified projective plane
-    const auto model_s = pow(alpha / point(2), 3.0); // point(2) = h7 * x' + h8 * y' + 1, where (x', y') are normalized coordinates
+    // TODO model_s is in the normalized space but s in in the unnormalized space
+    const auto model_s = std::pow(alpha / point(2), 3.0); // point(2) = h7 * x' + h8 * y' + 1, where (x', y') are normalized coordinates
     // scale-based residual: the deviation between the input scale and the model scale
-    const auto r_scale = 1.0 - (s / model_s);
+    const auto r_scale = std::abs(1.0 - (s / model_s));
+    std::cout << "Residual: " << r_scale << ", feature scale: " << s << ", model scale: " << model_s << "\n";
     // line induced by coordinates and orientation
+    // TODO the vanishing points are in normalized space but x, y are in the unnormalized space
     Eigen::Vector3d line;
     lineFromSIFT(x, y, t, line);
     // orientation-based residual: the minimal Euclidean distance between the
     // line and the two vanishing points
     const auto d1 = line.dot(vp1);
     const auto d2 = line.dot(vp2);
-    const auto r_orientation = (std::abs(d1) < std::abs(d2)) ? d1 : d2; 
+    const auto r_orientation = std::min(std::abs(d1), std::abs(d2)); 
     // TODO currently it is only possible to return a scalar residual
     return r_scale;
 }
@@ -364,7 +375,8 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
     const size_t* sample, // The points to which the model will be fit
     const size_t& sample_number,// The number of points
     cv::Mat& normalized_features, // The normalized features
-    Eigen::Matrix3d& normalizing_transform // The normalizing transformation
+    Eigen::Matrix3d& normalizing_transform, // The normalizing transformation
+    Eigen::Matrix3d& denormalizing_transform // The denormalizing transformation (inverse of the normalizing transformation)
 ) const
 {
     if (sample_number < 1)
@@ -437,12 +449,24 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
 			*norm_features_ptr++ = sample[i];
         }
     }
-    // create the matrix expressing the normalizing transformation
-    const auto tx = -s * mean_x;
-    const auto ty = -s * mean_y;
-    normalizing_transform << s, 0, tx,
-                             0, s, ty,
+    // create the matrices expressing the normalizing and denormalizing transformations
+    const auto tx = -mean_x;
+    const auto ty = -mean_y;
+    normalizing_transform << s, 0, s * tx,
+                             0, s, s * ty,
                              0, 0, 1;
+    const auto inv_s = 1.0 / s;
+    denormalizing_transform << inv_s, 0,     -tx,
+                               0,     inv_s, -ty,
+                               0,     0,     1;
+    if (!denormalizing_transform.isApprox(normalizing_transform.inverse())) {
+        fprintf(
+            stderr, 
+            "ERROR: Denormalizing transform is not the inverse of the \
+            normalizing transform.\n"
+        );
+        return false;
+    }
     return true;
 }
 
