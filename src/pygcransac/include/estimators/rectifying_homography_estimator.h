@@ -94,34 +94,38 @@ public:
         std::vector<_ModelType>* models_ // The estimated model parameters
     ) const
     {
-        // normalize features
-        cv::Mat normalized_features(
-            sampleSize(), data_.cols, data_.type()
+        // // normalize features
+        // cv::Mat normalized_features(
+        //     sampleSize(), data_.cols, data_.type()
+        // );
+        // double x0;
+        // double y0;
+        // double s;
+        // bool success = minimal_solver->normalizePoints(
+        //     data_, sample_, sampleSize(), normalized_features, x0, y0, s
+        // );
+        // if (!success)
+        // {
+        //     return false;
+        // }
+        // // estimate model(s)
+        // success = minimal_solver->estimateModel(
+        //     normalized_features, sample_, sampleSize(), *models_, nullptr
+        // );
+        // if (!success)
+        // {
+        //     return false;
+        // }
+        // for (auto& model : *models_)
+        // {
+        //     model.x0 = x0;
+        //     model.y0 = y0;
+        //     model.s = s;
+        // }
+        // return true;
+        return minimal_solver->estimateModel(
+            data_, sample_, sampleSize(), *models_, nullptr
         );
-        Eigen::Matrix3d normalizing_transform;
-        Eigen::Matrix3d denormalizing_transform;
-        bool success = minimal_solver->normalizePoints(
-            data_, sample_, sampleSize(), normalized_features,
-            normalizing_transform, denormalizing_transform
-        );
-        if (!success)
-        {
-            return false;
-        }
-        // estimate model(s)
-        success = minimal_solver->estimateModel(
-            normalized_features, sample_, sampleSize(), *models_, nullptr
-        );
-        if (!success)
-        {
-            return false;
-        }
-        for (auto& model : *models_)
-        {
-            model.descriptor = model.descriptor * normalizing_transform;
-            model.denormalizing_transform = denormalizing_transform;
-        }
-        return true;
     }
 
     // Estimating the model from a non-minimal sample
@@ -141,11 +145,11 @@ public:
         cv::Mat normalized_features(
             sample_number_, data_.cols, data_.type()
         );
-        Eigen::Matrix3d normalizing_transform;
-        Eigen::Matrix3d denormalizing_transform;
+        double x0;
+        double y0;
+        double s;
         bool success = non_minimal_solver->normalizePoints(
-            data_, sample_, sample_number_, normalized_features,
-            normalizing_transform, denormalizing_transform
+            data_, sample_, sample_number_, normalized_features, x0, y0, s
         );
         if (!success)
         {
@@ -161,8 +165,9 @@ public:
         }
         for (auto& model : *models_)
         {
-            model.descriptor = model.descriptor * normalizing_transform;
-            model.denormalizing_transform = denormalizing_transform;
+            model.x0 = x0;
+            model.y0 = y0;
+            model.s = s;
         }
         return true;
     }

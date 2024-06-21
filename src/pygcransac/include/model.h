@@ -130,23 +130,67 @@ public:
 	}
 };
 
-class ScaleBasedRectifyingHomography : public Homography
+struct ScaleBasedRectifyingHomography
 {
-public:
-	Eigen::Matrix3d denormalizing_transform; // kept separately from descriptor for residual calculation
-	double alpha; // kept only for residual calculation
-	ScaleBasedRectifyingHomography() : 
-		Homography(), denormalizing_transform(Eigen::Matrix3d()), alpha(0) {}
+	// model parameters
+	double h7 = 0.0;
+	double h8 = 0.0;
+	// feature-class scale (varies between different classes of features)
+	double alpha = 1.0;
+	// normalization parameters
+	double x0 = 0.0; // x-coordinate of the unnormalized sample set mean
+	double y0 = 0.0; // y-coordinate of the unnormalized sample set mean
+	double s = 1.0; // normalizing rescaling factor of sample set
+
+	void normalize(Eigen::Vector3d& p) const
+	{
+		// generally, the homogeneous coordinate can be different than 1 (p(2) != 1)
+		p(0) = s * p(2) * (p(0) - x0);
+		p(1) = s * p(2) * (p(1) - y0);
+	}
+
+	void denormalize(Eigen::Vector3d& p) const
+	{
+		const auto inv_s = 1.0 / s;
+		// generally, the homogeneous coordinate can be different than 1 (p(2) != 1)
+		p(0) = inv_s * p(0) + x0 * p(2);
+		p(1) = inv_s * p(1) + y0 * p(2);
+	}
+
+	void applyRectification(Eigen::Vector3d& p) const
+	{
+		p(2) = h7 * p(0) + h8 * p(1) + p(2);
+	}
+
+	void applyInverseRectification(Eigen::Vector3d& p) const
+	{
+		// negating h7 and h8 is equivalent to inverting the rectifying
+		// homography matrix in this case
+		p(2) = -h7 * p(0) - h8 * p(1) + p(2);
+	}
+
+	Eigen::Matrix3d getHomography() const
+	{
+		const double sh7 = s * h7;
+		const double sh8 = s * h8;
+		const double sx0h7 = x0 * sh7;
+		const double sy0h8 = y0 * sh8;
+		const double sx0h7y0h8 = sx0h7 + sy0h8;
+		Eigen::Matrix3d result;
+		result << 1.0 + sx0h7, x0 * sh8, 	-x0 * sx0h7y0h8,
+				  y0 * sh7,	   1.0 + sy0h8, -y0 * sx0h7y0h8,
+				  sh7,		   sh8, 		1.0 - sx0h7y0h8;
+		return result;
+	}
 };
 
-class SIFTRectifyingHomography : public ScaleBasedRectifyingHomography
+struct SIFTRectifyingHomography : public ScaleBasedRectifyingHomography
 {
-public:
-	SIFTRectifyingHomography() : ScaleBasedRectifyingHomography(), 
-		vp1(Eigen::Vector3d()), vp2(Eigen::Vector3d()) {}
-
-	Eigen::Vector3d vp1; // vanishing point in the original image used to estimate model
-	Eigen::Vector3d vp2; // vanishing point in the original image orthogonal (in the rectified image) to the first
+	// vanishing point in the original image used to estimate model
+	Eigen::Vector3d vp1 = Eigen::Vector3d::Zero(); 
+	// vanishing point in the original image, such that when rectified it is
+	// orthogonal to the first vanishing point (also rectified).
+	Eigen::Vector3d vp2 = Eigen::Vector3d::Zero();
 };
 
 }

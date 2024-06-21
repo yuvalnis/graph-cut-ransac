@@ -4426,14 +4426,15 @@ int findRectifyingHomographyScaleOnly_(
 		neighborhood_graph.get(), model, preemptive_verification, inlier_selector
 	);
 	const auto& statistics = gcransac.getRansacStatistics();
-
+    const auto H = model.getHomography();
+	// store final homography in vector in row-major order
 	homography.resize(9);
-	for (int i = 0; i < 3; i++)
+	for (size_t i = 0; i < 3; i++)
 	{
-		for (int j = 0; j < 3; j++)
+		for (size_t j = 0; j < 3; j++)
 		{
-			homography[i * 3 + j] = model.descriptor(i, j);
-		}
+			homography[i * 3 + j] = H(i, j);
+		}	
 	}
 
 	inliers.resize(num_features, false);
@@ -4551,27 +4552,26 @@ int findRectifyingHomographySIFT_(
 		neighborhood_graph.get(), model, preemptive_verification, inlier_selector
 	);
 	const auto& statistics = gcransac.getRansacStatistics();
-
-    const Eigen::Matrix3d H = model.denormalizing_transform * model.descriptor;
+    const Eigen::Matrix3d H = model.getHomography();
 	// store final homography in vector in row-major order
 	homography.resize(9);
 	for (size_t i = 0; i < 3; i++)
 	{
 		for (size_t j = 0; j < 3; j++)
 		{
-			homography[i * 3 + j] = model.descriptor(i, j);
+			homography[i * 3 + j] = H(i, j);
 		}	
 	}
 	// denormalize vanishing points (they are computed in the normalized 
 	// coordinate-system in the non-minimal)
-	const auto vp1 = model.denormalizing_transform * model.vp1;
-	const auto vp2 = model.denormalizing_transform * model.vp2;
+	model.denormalize(model.vp1);
+	model.denormalize(model.vp2);
 	// store coordinates of vanishing points as two concatenated column-vectors
 	vanishing_points.resize(6);
 	for (size_t i = 0; i < 3; i++)
 	{
-		vanishing_points[2 * i] = vp1(i);
-		vanishing_points[2 * i + 1] = vp2(i);
+		vanishing_points[2 * i] = model.vp1(i);
+		vanishing_points[2 * i + 1] = model.vp2(i);
 	}
 
     inliers.resize(num_features, false);
