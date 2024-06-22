@@ -116,14 +116,6 @@ bool orthogonalVanishingPoint(
     result(1) = -vp_rect(0); // y <-- -x
     result(2) = 0.0;
     model.applyInverseRectification(result);
-    if (std::abs(result(2)) > kEpsilon)
-    {
-        result /= result(2);
-    }
-    else
-    {
-        result(2) = 0.0; // zero-out very small homogeneous coordinate of vanishing point
-    }
     return true;
 }
 
@@ -184,10 +176,6 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     Eigen::Vector3d l2;
     lineFromSIFT(x2, y2, t2, l2);
     auto vp = l1.cross(l2); // intersection of lines
-    if (std::abs(vp(2)) > kEpsilon)
-    {
-        vp /= vp(2);
-    }
 
     coeffs(2, 0) = vp(0);
     coeffs(2, 1) = vp(1);
@@ -280,10 +268,6 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
 
             lineFromSIFT(xj, yj, tj, lj);
             auto vp = li.cross(lj); // intersection of lines
-            if (std::abs(vp(2)) > kEpsilon)
-            {
-                vp /= vp(2);
-            }
 
             coeffs(curr_idx, 0) = vp(0);
             coeffs(curr_idx, 1) = vp(1);
