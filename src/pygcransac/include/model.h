@@ -130,39 +130,80 @@ public:
 	}
 };
 
-struct ScaleBasedRectifyingHomography
+struct NormalizingTransform
+{
+	double x0 = 0.0; // x-coordinate of the unnormalized sample set mean
+	double y0 = 0.0; // y-coordinate of the unnormalized sample set mean
+	double s = 1.0; // normalizing rescaling factor of sample set
+
+	// (de-)normalizing methods for homogeneous coordinates
+
+	void normalize(double& x, double& y, double w) const
+	{
+		// generally, the homogeneous coordinate can be different than 1 (w != 1)
+		x = s * (x - x0 * w);
+		y = s * (y - y0 * w);
+	}
+
+	void denormalize(double& x, double& y, double w) const
+	{
+		const auto inv_s = 1.0 / s;
+		// generally, the homogeneous coordinate can be different than 1 (w != 1)
+		x = inv_s * x + x0 * w;
+		y = inv_s * y + y0 * w;
+	}
+
+	// (de-)normalzing methods for non-homogeneous coordinates
+
+	void normalize(double& x, double& y) const
+	{
+		normalize(x, y, 1.0);
+	}
+
+	void denormalize(double& x, double& y) const
+	{
+		denormalize(x, y, 1.0);
+	}
+
+	// (de-)normalizing methods for homogeneous vectors
+
+	void normalize(Eigen::Vector3d& p) const
+	{
+		normalize(p(0), p(1), p(2));
+	}
+
+	void denormalize(Eigen::Vector3d& p) const
+	{
+		denormalize(p(0), p(1), p(2));
+	}
+
+	// (de-)normalizing methods for scales
+
+	void normalizeScale(double& scale) const
+	{
+		scale *= s;
+	}
+
+	void denormalizeScale(double& scale) const
+	{
+		scale /= s;
+	}
+};
+
+struct ScaleBasedRectifyingHomography : public NormalizingTransform
 {
 	// model parameters
 	double h7 = 0.0;
 	double h8 = 0.0;
 	// feature-class scale (varies between different classes of features)
 	double alpha = 1.0;
-	// normalization parameters
-	double x0 = 0.0; // x-coordinate of the unnormalized sample set mean
-	double y0 = 0.0; // y-coordinate of the unnormalized sample set mean
-	double s = 1.0; // normalizing rescaling factor of sample set
 
-	void normalize(Eigen::Vector3d& p) const
-	{
-		// generally, the homogeneous coordinate can be different than 1 (p(2) != 1)
-		p(0) = s * p(2) * (p(0) - x0);
-		p(1) = s * p(2) * (p(1) - y0);
-	}
-
-	void denormalize(Eigen::Vector3d& p) const
-	{
-		const auto inv_s = 1.0 / s;
-		// generally, the homogeneous coordinate can be different than 1 (p(2) != 1)
-		p(0) = inv_s * p(0) + x0 * p(2);
-		p(1) = inv_s * p(1) + y0 * p(2);
-	}
-
-	void applyRectification(Eigen::Vector3d& p) const
+	void rectify(Eigen::Vector3d& p) const
 	{
 		p(2) = h7 * p(0) + h8 * p(1) + p(2);
 	}
 
-	void applyInverseRectification(Eigen::Vector3d& p) const
+	void unrectify(Eigen::Vector3d& p) const
 	{
 		// negating h7 and h8 is equivalent to inverting the rectifying
 		// homography matrix in this case

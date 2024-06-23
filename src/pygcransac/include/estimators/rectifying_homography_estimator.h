@@ -145,11 +145,10 @@ public:
         cv::Mat normalized_features(
             sample_number_, data_.cols, data_.type()
         );
-        double x0;
-        double y0;
-        double s;
+        NormalizingTransform normalizing_transform;
         bool success = non_minimal_solver->normalizePoints(
-            data_, sample_, sample_number_, normalized_features, x0, y0, s
+            data_, sample_, sample_number_, normalized_features,
+            normalizing_transform
         );
         if (!success)
         {
@@ -165,9 +164,9 @@ public:
         }
         for (auto& model : *models_)
         {
-            model.x0 = x0;
-            model.y0 = y0;
-            model.s = s;
+            model.x0 = normalizing_transform.x0;
+            model.y0 = normalizing_transform.y0;
+            model.s = normalizing_transform.s;
         }
         return true;
     }

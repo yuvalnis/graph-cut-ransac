@@ -61,7 +61,7 @@ public:
         const size_t* sample,
         const size_t& sample_number,
         cv::Mat& normalized_features,
-        double& x0, double& y0, double& s
+        NormalizingTransform& normalizing_transform
     ) const;
 
 protected:
@@ -102,7 +102,7 @@ bool orthogonalVanishingPoint(
     constexpr double kEpsilon = 1e-9;
     
     Eigen::Vector3d vp_rect = vp;
-    model.applyRectification(vp_rect);
+    model.rectify(vp_rect);
     if (std::abs(vp_rect(2)) > kEpsilon)
     {
         fprintf(
@@ -115,7 +115,7 @@ bool orthogonalVanishingPoint(
     result(0) = vp_rect(1); // x <-- y
     result(1) = -vp_rect(0); // y <-- -x
     result(2) = 0.0;
-    model.applyInverseRectification(result);
+    model.unrectify(result);
     return true;
 }
 
@@ -356,7 +356,7 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     // line induced by coordinates and orientation
     Eigen::Vector3d line;
     lineFromSIFT(point(0), point(1), orientation, line); // compute before applying the homography to the point
-    model.applyRectification(point);
+    model.rectify(point);
     // point(2) = h7 * x' + h8 * y' + 1, where (x', y') are normalized coordinates
     if (std::abs(point(2)) < kEpsilon)
     {
@@ -390,7 +390,7 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
     const size_t* sample, // The points to which the model will be fit
     const size_t& sample_number,// The number of points
     cv::Mat& normalized_features, // The normalized features
-    double& x0, double& y0, double& s // the normalization parameters
+    NormalizingTransform& normalizing_transform // the normalization transformation model
 ) const
 {
     if (sample_number < 1)
@@ -407,24 +407,24 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
         return data_ptr + idx * data.cols;
     };
     // compute mean position of features
-    x0 = 0.0;
-    y0 = 0.0;
+    normalizing_transform.x0 = 0.0;
+    normalizing_transform.y0 = 0.0;
     for (size_t i = 0; i < sample_number; i++)
     {
         const auto* sample = get_sample_ptr(i);
-        x0 += sample[0]; // x-coordinate
-        y0 += sample[1]; // y-coordinate
+        normalizing_transform.x0 += sample[0]; // x-coordinate
+        normalizing_transform.y0 += sample[1]; // y-coordinate
     }
     const auto inv_n = 1.0 / static_cast<double>(sample_number);
-    x0 *= inv_n;
-    y0 *= inv_n;
+    normalizing_transform.x0 *= inv_n;
+    normalizing_transform.y0 *= inv_n;
     // compute average Euclidean distance to mean position
     double avg_dist = 0.0;
     for (size_t i = 0; i < sample_number; i++)
     {
         const auto* sample = get_sample_ptr(i);
-        const auto dx = sample[0] - x0; // x-coordinate
-        const auto dy = sample[1] - y0; // y-coordinate
+        const auto dx = sample[0] - normalizing_transform.x0; // x-coordinate
+        const auto dy = sample[1] - normalizing_transform.y0; // y-coordinate
         avg_dist += sqrt(dx * dx + dy * dy);
     }
     avg_dist *= inv_n;
@@ -440,22 +440,25 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
     }
     // compute scaling factor to transform all feature positions to so that averge
     // distance is sqrt(2).
-    s = M_SQRT2 / avg_dist;
+    normalizing_transform.s = M_SQRT2 / avg_dist;
     // compute normalized features - normalizing is relevant only for coordinates
     // and scale as the scaling of feature positions about the origin is isotropic
     auto* norm_features_ptr = reinterpret_cast<double*>(normalized_features.data);
     for (size_t i = 0; i < sample_number; i++)
     {
         const auto* sample = get_sample_ptr(i);
-        const auto x = sample[0]; // x-coordinate
-        const auto y = sample[1]; // y-coordinate
-        const auto orientation = sample[2]; // orientation
-        const auto scale = sample[3]; // scale
+        auto norm_x = sample[0]; // x-coordinate
+        auto norm_y = sample[1]; // y-coordinate
+        const auto norm_orientation = sample[2]; // orientation
+        auto norm_scale = sample[3]; // scale
 
-        *norm_features_ptr++ = s * (x - x0);
-        *norm_features_ptr++ = s * (y - y0);
-        *norm_features_ptr++ = orientation; // orientation is not affected by isotropic scaling
-        *norm_features_ptr++ = s * scale;
+        normalizing_transform.normalize(norm_x, norm_y);
+        normalizing_transform.normalizeScale(norm_scale);
+
+        *norm_features_ptr++ = norm_x;
+        *norm_features_ptr++ = norm_y;
+        *norm_features_ptr++ = norm_orientation; // orientation is not affected by isotropic scaling
+        *norm_features_ptr++ = norm_scale;
         // ensures that if the dimension of the features is larger
         // than 4, then the normalization will still succeed.
         for (size_t i = 4; i < normalized_features.cols; ++i)
