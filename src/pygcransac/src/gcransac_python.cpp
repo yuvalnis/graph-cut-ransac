@@ -4478,8 +4478,7 @@ int findRectifyingHomographySIFT_(
 		return 0;
 	}
 
-	const size_t num_features = features.size() / kFeatureSize; 
-
+	const auto num_features = features.size() / kFeatureSize;
 	if (num_features != weights.size())
 	{
 		fprintf(
