@@ -94,35 +94,6 @@ public:
         std::vector<_ModelType>* models_ // The estimated model parameters
     ) const
     {
-        // // normalize features
-        // cv::Mat normalized_features(
-        //     sampleSize(), data_.cols, data_.type()
-        // );
-        // double x0;
-        // double y0;
-        // double s;
-        // bool success = minimal_solver->normalizePoints(
-        //     data_, sample_, sampleSize(), normalized_features, x0, y0, s
-        // );
-        // if (!success)
-        // {
-        //     return false;
-        // }
-        // // estimate model(s)
-        // success = minimal_solver->estimateModel(
-        //     normalized_features, sample_, sampleSize(), *models_, nullptr
-        // );
-        // if (!success)
-        // {
-        //     return false;
-        // }
-        // for (auto& model : *models_)
-        // {
-        //     model.x0 = x0;
-        //     model.y0 = y0;
-        //     model.s = s;
-        // }
-        // return true;
         return minimal_solver->estimateModel(
             data_, sample_, sampleSize(), *models_, nullptr
         );
@@ -156,7 +127,7 @@ public:
         }
         // estimate model(s)
         success = non_minimal_solver->estimateModel(
-            normalized_features, sample_, sample_number_, *models_, weights_
+            normalized_features, nullptr, sample_number_, *models_, weights_ // sample_ = nullptr because normalized features is now made up only of current inliers
         );
         if (!success)
         {
@@ -165,12 +136,12 @@ public:
         for (auto& model : *models_)
         {
             model.x0 = normalizing_transform.x0;
-            model.y0 = normalizing_transform.y0;
+            model.y0 = normalizing_transform.y0; 
             model.s = normalizing_transform.s;
         }
         return true;
     }
-
+ 
     OLGA_INLINE double residual(
         const cv::Mat& feature_,
         const _ModelType& model_
