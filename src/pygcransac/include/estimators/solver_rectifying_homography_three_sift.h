@@ -278,9 +278,9 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     normalizing_transform.y0 = 0.0;
     for (size_t i = 0; i < sample_number; i++)
     {
-        const auto* sample = get_sample_ptr(i);
-        normalizing_transform.x0 += sample[0]; // x-coordinate
-        normalizing_transform.y0 += sample[1]; // y-coordinate
+        const auto* feature = get_sample_ptr(i);
+        normalizing_transform.x0 += feature[0]; // x-coordinate
+        normalizing_transform.y0 += feature[1]; // y-coordinate
     }
     const auto inv_n = 1.0 / static_cast<double>(sample_number);
     normalizing_transform.x0 *= inv_n;
@@ -289,9 +289,9 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     double avg_dist = 0.0;
     for (size_t i = 0; i < sample_number; i++)
     {
-        const auto* sample = get_sample_ptr(i);
-        const auto dx = sample[0] - normalizing_transform.x0; // x-coordinate
-        const auto dy = sample[1] - normalizing_transform.y0; // y-coordinate
+        const auto* feature = get_sample_ptr(i);
+        const auto dx = feature[0] - normalizing_transform.x0; // x-coordinate
+        const auto dy = feature[1] - normalizing_transform.y0; // y-coordinate
         avg_dist += sqrt(dx * dx + dy * dy);
     }
     avg_dist *= inv_n;
@@ -313,10 +313,10 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     auto* norm_features_ptr = reinterpret_cast<double*>(normalized_features.data);
     for (size_t i = 0; i < sample_number; i++)
     {
-        const auto* sample = get_sample_ptr(i);
-        auto norm_x = sample[0]; // x-coordinate
-        auto norm_y = sample[1]; // y-coordinate
-        auto norm_scale = sample[2]; // scale
+        const auto* feature = get_sample_ptr(i);
+        auto norm_x = feature[0]; // x-coordinate
+        auto norm_y = feature[1]; // y-coordinate
+        auto norm_scale = feature[2]; // scale
 
         normalizing_transform.normalize(norm_x, norm_y);
         normalizing_transform.normalizeScale(norm_scale);
@@ -328,7 +328,7 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
         // than 4, then the normalization will still succeed.
         for (size_t i = 3; i < normalized_features.cols; ++i)
         {
-			*norm_features_ptr++ = sample[i];
+			*norm_features_ptr++ = feature[i];
         }
     }
 

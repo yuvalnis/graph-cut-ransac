@@ -4438,11 +4438,7 @@ int findRectifyingHomographyScaleOnly_(
 	}
 
 	inliers.resize(num_features, false);
-	const int num_inliers = statistics.inliers.size();
-	for (auto pt_idx = 0; pt_idx < num_features; ++pt_idx) {
-		inliers[pt_idx] = false;
-
-	}
+	const auto num_inliers = statistics.inliers.size();
 	for (auto pt_idx = 0; pt_idx < num_inliers; ++pt_idx) {
 		inliers[statistics.inliers[pt_idx]] = true;
 	}
@@ -4574,11 +4570,7 @@ int findRectifyingHomographySIFT_(
 	}
 
     inliers.resize(num_features, false);
-	const size_t num_inliers = statistics.inliers.size();
-	for (auto pt_idx = 0; pt_idx < num_features; ++pt_idx) {
-		inliers[pt_idx] = false;
-
-	}
+	const auto num_inliers = statistics.inliers.size();
 	for (size_t pt_idx = 0; pt_idx < num_inliers; ++pt_idx) {
 		inliers[statistics.inliers[pt_idx]] = true;
 	}

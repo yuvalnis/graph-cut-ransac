@@ -1,6 +1,5 @@
 #pragma once
 
-// #include <iostream>
 #include "solver_engine.h"
 #include "math_utils.h"
 
@@ -196,10 +195,6 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     if (std::abs(model.alpha) < kEpsilon)
     {
         fprintf(stderr, "Invalid solution for the minimal case: alpha is zero\n");
-        // std::cout << "\nMinimal solution with zero alpha:\n"
-        //           << "Number of samples: " << sample_number_ << "\n"
-        //           << "coefficient matrix:\n" << coeffs << "\n"
-        //           << "x: " << x.transpose() << "\n";
         return false;
     }
     model.vp1 = vp;
@@ -268,6 +263,13 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
 
             lineFromSIFT(xj, yj, tj, lj);
             auto vp = li.cross(lj); // intersection of lines
+            // rescale homogeneous vanishing point to scale coefficients to
+            // range [-1, 1]
+            const auto max_abs_value = vp.cwiseAbs().maxCoeff();
+            if (max_abs_value > 1.0)
+            {
+                vp /= max_abs_value;
+            }
 
             coeffs(curr_idx, 0) = vp(0);
             coeffs(curr_idx, 1) = vp(1);
@@ -346,13 +348,8 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     double s = feature_ptr[3];
     // the scale change which fits the model
     Eigen::Vector3d point(feature_ptr[0], feature_ptr[1], 1.0);
-    // std::cout << "\nResidual computation:\n" 
-    //           << "\tInput feature: x = " << point(0) << ", y = " << point(1)
-    //           << ", orientation = " << orientation << ", scale = " << s << "\n";
     model.normalize(point);
     s *= model.s;
-    // std::cout << "\tNormalized feature: x = " << point(0) << ", y = " << point(1)
-    //           << ", orientation = " << orientation << ", scale = " << s << "\n";
     // line induced by coordinates and orientation
     Eigen::Vector3d line;
     lineFromSIFT(point(0), point(1), orientation, line); // compute before applying the homography to the point
@@ -365,8 +362,6 @@ double RectifyingHomographyTwoSIFTSolver::residual(
         return DBL_MAX;
     }
     const auto model_s = std::pow(alpha / point(2), 3.0);
-    // std::cout << "\tModel parameters: h7 = " << model.h7 << ", h8 = " << model.h8 
-    //           << ", alpha = " << alpha << ", model scale = " << model_s << "\n";
     // scale-based residual: the deviation between the input scale and the model scale
     if (std::abs(model_s) < kEpsilon)
     {
@@ -375,12 +370,11 @@ double RectifyingHomographyTwoSIFTSolver::residual(
         return DBL_MAX;
     }
     const auto r_scale = std::abs(1.0 - (s / model_s));
-    // std::cout << "\tScale residual = " << r_scale << "\n";
     // orientation-based residual: the minimal Euclidean distance between the
     // line and the two vanishing points
-    const auto d1 = line.dot(vp1);
-    const auto d2 = line.dot(vp2);
-    const auto r_orientation = std::min(std::abs(d1), std::abs(d2)); 
+    const auto d1 = std::abs(line.dot(vp1));
+    const auto d2 = std::abs(line.dot(vp2));
+    const auto r_orientation = std::min(d1, d2);
     // TODO currently it is only possible to return a scalar residual
     return r_scale;
 }
@@ -393,6 +387,10 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
     NormalizingTransform& normalizing_transform // the normalization transformation model
 ) const
 {
+    constexpr size_t x_pos = 0;
+    constexpr size_t y_pos = 1;
+    constexpr size_t t_pos = 2;
+    constexpr size_t s_pos = 3;
     if (sample_number < 1)
     {
         fprintf(stderr,
@@ -400,20 +398,16 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
         );
         return false;
     }
-    // helper function to fetch correct sample
-    auto get_sample_ptr = [sample, &data](size_t i) {
-        const auto *data_ptr = reinterpret_cast<double*>(data.data);
-        const size_t idx = (sample == nullptr) ? i : sample[i];
-        return data_ptr + idx * data.cols;
-    };
+    const auto cols = data.cols;
+    const double* data_ptr = reinterpret_cast<double*>(data.data);
     // compute mean position of features
     normalizing_transform.x0 = 0.0;
     normalizing_transform.y0 = 0.0;
     for (size_t i = 0; i < sample_number; i++)
     {
-        const auto* sample = get_sample_ptr(i);
-        normalizing_transform.x0 += sample[0]; // x-coordinate
-        normalizing_transform.y0 += sample[1]; // y-coordinate
+        const double* feature = data_ptr + cols * sample[i];
+        normalizing_transform.x0 += feature[x_pos]; // x-coordinate
+        normalizing_transform.y0 += feature[y_pos]; // y-coordinate
     }
     const auto inv_n = 1.0 / static_cast<double>(sample_number);
     normalizing_transform.x0 *= inv_n;
@@ -422,9 +416,9 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
     double avg_dist = 0.0;
     for (size_t i = 0; i < sample_number; i++)
     {
-        const auto* sample = get_sample_ptr(i);
-        const auto dx = sample[0] - normalizing_transform.x0; // x-coordinate
-        const auto dy = sample[1] - normalizing_transform.y0; // y-coordinate
+        const double* feature = data_ptr + cols * sample[i];
+        const auto dx = feature[x_pos] - normalizing_transform.x0; // x-coordinate
+        const auto dy = feature[y_pos] - normalizing_transform.y0; // y-coordinate
         avg_dist += sqrt(dx * dx + dy * dy);
     }
     avg_dist *= inv_n;
@@ -446,25 +440,19 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
     auto* norm_features_ptr = reinterpret_cast<double*>(normalized_features.data);
     for (size_t i = 0; i < sample_number; i++)
     {
-        const auto* sample = get_sample_ptr(i);
-        auto norm_x = sample[0]; // x-coordinate
-        auto norm_y = sample[1]; // y-coordinate
-        const auto norm_orientation = sample[2]; // orientation
-        auto norm_scale = sample[3]; // scale
+        const double* feature = data_ptr + cols * sample[i];
+        auto norm_x = feature[x_pos]; // x-coordinate
+        auto norm_y = feature[y_pos]; // y-coordinate
+        auto norm_scale = feature[s_pos]; // scale
 
         normalizing_transform.normalize(norm_x, norm_y);
         normalizing_transform.normalizeScale(norm_scale);
-
-        *norm_features_ptr++ = norm_x;
-        *norm_features_ptr++ = norm_y;
-        *norm_features_ptr++ = norm_orientation; // orientation is not affected by isotropic scaling
-        *norm_features_ptr++ = norm_scale;
-        // ensures that if the dimension of the features is larger
-        // than 4, then the normalization will still succeed.
-        for (size_t i = 4; i < normalized_features.cols; ++i)
-        {
-			*norm_features_ptr++ = sample[i];
-        }
+        
+        norm_features_ptr[i * normalized_features.cols + x_pos] = norm_x;
+        norm_features_ptr[i * normalized_features.cols + y_pos] = norm_y;
+        // orientation is not affected by translation and isotropic scaling
+        norm_features_ptr[i * normalized_features.cols + t_pos] = feature[t_pos];
+        norm_features_ptr[i * normalized_features.cols + s_pos] = norm_scale;
     }
 
     return true;
