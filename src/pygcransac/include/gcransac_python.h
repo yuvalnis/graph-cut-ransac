@@ -1,5 +1,6 @@
 #include <vector>
 #include <string>
+#include "samplers/sampler_type.hpp"
 
 // A method for estimating a rigid translation between two point clouds
 int findRigidTransform_(
@@ -712,6 +713,7 @@ int findRectifyingHomographySIFT_(
 	size_t min_iteration_number, // minimum iteration number. value equal or higher to 50 is recommended
 	size_t max_iteration_number, // maximum iteration number. value equal or higher to 1000 is recommended
 	size_t max_local_optimization_number, // the number of RANSAC iterations done in the local optimization
+	gcransac::sampler::SamplerType sampler_type, 
 	std::vector<bool>& inliers,	// output inlier boolean mask
 	std::vector<double>& homography,	// output homography
 	std::vector<double>& vanishing_points // output vanishing points corresponsing to the estimated homography 

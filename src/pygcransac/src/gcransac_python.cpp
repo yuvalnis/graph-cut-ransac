@@ -4456,10 +4456,11 @@ int findRectifyingHomographySIFT_(
 	std::vector<double>& features, // input SIFT features
 	std::vector<double>& weights, // input SIFT feature weights
 	double threshold, // threshold for inlier selection
-	double spatial_coherence_weight, // = 0
-	size_t min_iteration_number, // = 10000
-	size_t max_iteration_number, // = 10000
-	size_t max_local_optimization_number, // = 50
+	double spatial_coherence_weight,
+	size_t min_iteration_number,
+	size_t max_iteration_number,
+	size_t max_local_optimization_number,
+	gcransac::sampler::SamplerType sampler_type,
 	std::vector<bool>& inliers,	// output inlier boolean mask
 	std::vector<double>& homography, // output estimated homography
 	std::vector<double>& vanishing_points // output vanishing points corresponsing to the estimated homography 
@@ -4511,10 +4512,31 @@ int findRectifyingHomographySIFT_(
 	// initialize sampler
 	typedef sampler::Sampler<cv::Mat, size_t> AbstractSampler;
 	// the main sampler is used for sampling in the main RANSAC loop
-	// TODO enable choosing between types of samplers, and not just the uniform sampler
-	std::unique_ptr<AbstractSampler> main_sampler = std::unique_ptr<AbstractSampler>(
-		new sampler::UniformSampler(&sample_set)
-	);
+	std::unique_ptr<AbstractSampler> main_sampler;
+	switch (sampler_type)
+	{
+	case gcransac::sampler::SamplerType::Uniform:
+		main_sampler = std::unique_ptr<AbstractSampler>(
+			new sampler::UniformSampler(&sample_set)
+		);
+		break;
+	case gcransac::sampler::SamplerType::ProSaC:
+		main_sampler = std::unique_ptr<AbstractSampler>(
+			new sampler::ProsacSampler(&sample_set, estimator.sampleSize())
+		);
+		break;
+	default:
+		NeighborhoodGraph *neighborhood_graph_ptr = neighborhood_graph.release();
+		delete neighborhood_graph_ptr;
+		fprintf(
+			stderr,
+			"ERROR: No implementation this sample type.\n\
+			Accepted types:\n\
+			0: UNIFORM\n\
+			1: PROSAC\n"
+		);
+		return 0;
+	}
 
     // The local optimization sampler is used inside the local optimization
 	sampler::UniformSampler local_optimization_sampler(&sample_set);

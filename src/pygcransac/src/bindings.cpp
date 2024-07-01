@@ -942,7 +942,8 @@ py::tuple findRectifyingHomographySIFT(
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
 	size_t max_iteration_number,
-	size_t max_local_optimization_number
+	size_t max_local_optimization_number,
+	gcransac::sampler::SamplerType sampler_type
 )
 {
 	constexpr size_t kFeatureSize = 4;
@@ -996,6 +997,7 @@ py::tuple findRectifyingHomographySIFT(
 		min_iteration_number,
 		max_iteration_number,
 		max_local_optimization_number,
+		sampler_type,
 		cpp_inliers,
 		cpp_homography,
 		cpp_vanishing_points
@@ -1052,6 +1054,13 @@ PYBIND11_PLUGIN(pygcransac) {
 		   findRigidTransform,
 
     )doc");
+
+	py::enum_<gcransac::sampler::SamplerType>(m, "SamplerType")
+		.value("UNIFORM", gcransac::sampler::SamplerType::Uniform)
+		.value("PROSAC", gcransac::sampler::SamplerType::ProSaC)
+		.value("PROGRESSIVE_NAPSAC", gcransac::sampler::SamplerType::ProgressiveNapsac)
+		.value("IMPORTANCE", gcransac::sampler::SamplerType::Importance)
+		.value("ADAPTIVE_REORDERING", gcransac::sampler::SamplerType::AdaptiveReordering);
 
 	m.def("findFundamentalMatrix", &findFundamentalMatrix, R"doc(some doc)doc",
         py::arg("correspondences"),
@@ -1224,8 +1233,9 @@ PYBIND11_PLUGIN(pygcransac) {
 		py::arg("spatial_coherence_weight") = 0.0,
 		py::arg("min_iteration_number") = 10000,
 		py::arg("max_iteration_number") = 10000,
-		py::arg("max_local_optimization_number") = 50
+		py::arg("max_local_optimization_number") = 50,
+		py::arg("sampler_type") = gcransac::sampler::SamplerType::Uniform
 	);
 
-  return m.ptr();
+  	return m.ptr();
 }
