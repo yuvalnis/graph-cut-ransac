@@ -4456,6 +4456,10 @@ int findRectifyingHomographySIFT_(
 	std::vector<double>& features, // input SIFT features
 	std::vector<double>& weights, // input SIFT feature weights
 	double threshold, // threshold for inlier selection
+	double spatial_coherence_weight, // = 0
+	size_t min_iteration_number, // = 10000
+	size_t max_iteration_number, // = 10000
+	size_t max_local_optimization_number, // = 50
 	std::vector<bool>& inliers,	// output inlier boolean mask
 	std::vector<double>& homography, // output estimated homography
 	std::vector<double>& vanishing_points // output vanishing points corresponsing to the estimated homography 
@@ -4534,12 +4538,12 @@ int findRectifyingHomographySIFT_(
 	inlier_selector::EmptyInlierSelector<Estimator, NeighborhoodGraph> inlier_selector(neighborhood_graph.get());
 
 	GCRANSAC<Estimator, NeighborhoodGraph, SIFTRectifyingHomography> gcransac;
-	// TODO pass functions arguments to configure GC-RANSAC
 	gcransac.settings.threshold = threshold;
-
-	// without this flag the code fails because the empty neighborhood is access,
-	// resulting in a segmentation flow.
-	gcransac.settings.do_local_optimization = false; 
+	gcransac.settings.do_local_optimization = true; 
+	gcransac.settings.spatial_coherence_weight = spatial_coherence_weight;
+	gcransac.settings.min_iteration_number = min_iteration_number;
+	gcransac.settings.max_iteration_number = max_iteration_number;
+	gcransac.settings.max_local_optimization_number = max_local_optimization_number;
 
 	SIFTRectifyingHomography model;
 	gcransac.run(

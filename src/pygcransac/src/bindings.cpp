@@ -937,13 +937,19 @@ py::tuple findRectifyingHomographyScaleOnly(
 
 py::tuple findRectifyingHomographySIFT(
 	py::array_t<double> features,
-	double threshold
+	py::array_t<double> weights,
+	double threshold,
+	double spatial_coherence_weight,
+	size_t min_iteration_number,
+	size_t max_iteration_number,
+	size_t max_local_optimization_number
 )
 {
 	constexpr size_t kFeatureSize = 4;
 	constexpr size_t kNumMinFeatures = 2;
 
 	py::buffer_info features_buff = features.request();
+	py::buffer_info weights_buff = weights.request();
 
 	if (features_buff.ndim != 2)
 	{
@@ -962,20 +968,34 @@ py::tuple findRectifyingHomographySIFT(
 				  << num_features << " rows.";
 		throw std::invalid_argument(error_msg.str());
 	}
-	// construct C++ vector for features from python array
-	const auto *features_ptr = static_cast<double*>(features_buff.ptr);
+	if (weights_buff.shape[0] != num_features)
+	{
+		std::stringstream error_msg;
+		error_msg << "Weights should have the same length as the number of features.\n"
+				  << "There are " << weights_buff.shape[0] << " weights and "
+				  << num_features << " features.\n";
+		throw std::invalid_argument(error_msg.str());
+	}
+	// construct C++ vector for features and weights from python array
+	const auto* features_ptr = static_cast<double*>(features_buff.ptr);
+	const auto* weights_ptr = static_cast<double*>(weights_buff.ptr);
 	std::vector<double> cpp_features;
+	std::vector<double> cpp_weights;
 	cpp_features.assign(features_ptr, features_ptr + features_buff.size);
+	cpp_weights.assign(weights_ptr, weights_ptr + weights_buff.size);
 
 	std::vector<double> cpp_homography(9);
 	std::vector<double> cpp_vanishing_points(6);
     std::vector<bool> cpp_inliers(num_features);
-	std::vector<double> cpp_weights(num_features, 1.0);	// uniform weights for now
 
 	const auto num_inliers = findRectifyingHomographySIFT_(
 		cpp_features,
 		cpp_weights,
 		threshold,
+		spatial_coherence_weight,
+		min_iteration_number,
+		max_iteration_number,
+		max_local_optimization_number,
 		cpp_inliers,
 		cpp_homography,
 		cpp_vanishing_points
@@ -1199,7 +1219,12 @@ PYBIND11_PLUGIN(pygcransac) {
 
 	m.def("findRectifyingHomographySIFT", &findRectifyingHomographySIFT, R"doc(some doc)doc",
 		py::arg("features"),
-		py::arg("threshold") = 1.0
+		py::arg("weights"),
+		py::arg("threshold"),
+		py::arg("spatial_coherence_weight") = 0.0,
+		py::arg("min_iteration_number") = 10000,
+		py::arg("max_iteration_number") = 10000,
+		py::arg("max_local_optimization_number") = 50
 	);
 
   return m.ptr();
