@@ -212,16 +212,15 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 
 	Eigen::Matrix3d getHomography() const
 	{
-		const double sh7 = s * h7;
-		const double sh8 = s * h8;
-		const double sx0h7 = x0 * sh7;
-		const double sy0h8 = y0 * sh8;
-		const double sx0h7y0h8 = sx0h7 + sy0h8;
-		Eigen::Matrix3d result;
-		result << 1.0 + sx0h7, x0 * sh8, 	-x0 * sx0h7y0h8,
-				  y0 * sh7,	   1.0 + sy0h8, -y0 * sx0h7y0h8,
-				  sh7,		   sh8, 		1.0 - sx0h7y0h8;
-		return result;
+		Eigen::Matrix3d N; // normalizing transform
+		N << s, 0, -s * x0,
+			 0, s, -s * y0,
+			 0, 0, 1;
+		Eigen::Matrix3d H; // homography in normalized coordinate space
+		H << 1,  0,  0,
+			 0,  1,  0,
+			 h7, h8, 1;
+		return N.inverse() * H * N;
 	}
 };
 

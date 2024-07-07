@@ -98,11 +98,9 @@ bool orthogonalVanishingPoint(
     Eigen::Vector3d& result
 )
 {
-    constexpr double kEpsilon = 1e-9;
-    
     Eigen::Vector3d vp_rect = vp;
     model.rectify(vp_rect);
-    if (std::abs(vp_rect(2)) > kEpsilon)
+    if (std::abs(vp_rect(2)) > 1e-6)
     {
         fprintf(
             stderr,
