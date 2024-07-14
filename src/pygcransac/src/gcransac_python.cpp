@@ -1972,7 +1972,7 @@ int findEssentialMatrix_(
 			Model,
 			MSACScoringFunction<utils::DefaultEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::DefaultEssentialMatrixEstimator>> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -1996,7 +1996,7 @@ int findEssentialMatrix_(
 	{		
 		GCRANSAC<utils::DefaultEssentialMatrixEstimator, 
 			AbstractNeighborhood> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -2314,7 +2314,7 @@ int findEssentialMatrixAC_(
 			Model,
 			MSACScoringFunction<utils::ACBasedEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::ACBasedEssentialMatrixEstimator>> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -2337,7 +2337,7 @@ int findEssentialMatrixAC_(
 	else
 	{
 		GCRANSAC<utils::ACBasedEssentialMatrixEstimator, AbstractNeighborhood> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -2648,7 +2648,7 @@ int findEssentialMatrixSIFT_(
 			Model,
 			MSACScoringFunction<utils::SIFTBasedEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::SIFTBasedEssentialMatrixEstimator>> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -2671,7 +2671,7 @@ int findEssentialMatrixSIFT_(
 	else
 	{		
 		GCRANSAC<utils::SIFTBasedEssentialMatrixEstimator, AbstractNeighborhood> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -2986,7 +2986,7 @@ int findPlanarEssentialMatrix_(
 			Model,
 			MSACScoringFunction<utils::DefaultPlanarEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::DefaultPlanarEssentialMatrixEstimator>> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -3012,7 +3012,7 @@ int findPlanarEssentialMatrix_(
 	{
 		
 		GCRANSAC<utils::DefaultPlanarEssentialMatrixEstimator, AbstractNeighborhood> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -3337,7 +3337,7 @@ int findGravityEssentialMatrix_(
 			Model,
 			MSACScoringFunction<utils::DefaultGravityEssentialMatrixEstimator>,
 			preemption::SPRTPreemptiveVerfication<utils::DefaultGravityEssentialMatrixEstimator>> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -3363,7 +3363,7 @@ int findGravityEssentialMatrix_(
 	{
 		
 		GCRANSAC<utils::DefaultGravityEssentialMatrixEstimator, AbstractNeighborhood> gcransac;
-		gcransac.settings.threshold = threshold / threshold_normalizer; // The inlier-outlier threshold
+		gcransac.settings.threshold = {threshold / threshold_normalizer}; // The inlier-outlier threshold
 		gcransac.settings.spatial_coherence_weight = spatial_coherence_weight; // The weight of the spatial coherence term
 		gcransac.settings.confidence = conf; // The required confidence in the results
 		gcransac.settings.max_local_optimization_number = lo_number; // The maximum number of local optimizations
@@ -4335,6 +4335,12 @@ int findHomographySIFT_(
 int findRectifyingHomographyScaleOnly_(
 	std::vector<double>& features,	// input SIFT features
 	std::vector<double>& weights,	// input SIFT feature weights
+	double scale_residual_thresh, // threshold for inlier selection
+	double spatial_coherence_weight,
+	size_t min_iteration_number,
+	size_t max_iteration_number,
+	size_t max_local_optimization_number,
+	gcransac::sampler::SamplerType sampler_type,
 	std::vector<bool>& inliers,	// output inlier boolean mask
 	std::vector<double>& homography	// output homography
 )
@@ -4352,8 +4358,7 @@ int findRectifyingHomographyScaleOnly_(
 		return 0;
 	}
 
-	const size_t num_features = features.size() / kFeatureSize; 
-
+	const auto num_features = features.size() / kFeatureSize; 
 	if (num_features != weights.size())
 	{
 		fprintf(
@@ -4387,10 +4392,31 @@ int findRectifyingHomographyScaleOnly_(
 	// initialize sampler
 	typedef sampler::Sampler<cv::Mat, size_t> AbstractSampler;
 	// the main sampler is used for sampling in the main RANSAC loop
-	// TODO enable choosing between types of samplers, and not just the uniform sampler
-	std::unique_ptr<AbstractSampler> main_sampler = std::unique_ptr<AbstractSampler>(
-		new sampler::UniformSampler(&sample_set)
-	);
+	std::unique_ptr<AbstractSampler> main_sampler;
+	switch (sampler_type)
+	{
+	case gcransac::sampler::SamplerType::Uniform:
+		main_sampler = std::unique_ptr<AbstractSampler>(
+			new sampler::UniformSampler(&sample_set)
+		);
+		break;
+	case gcransac::sampler::SamplerType::ProSaC:
+		main_sampler = std::unique_ptr<AbstractSampler>(
+			new sampler::ProsacSampler(&sample_set, estimator.sampleSize())
+		);
+		break;
+	default:
+		NeighborhoodGraph *neighborhood_graph_ptr = neighborhood_graph.release();
+		delete neighborhood_graph_ptr;
+		fprintf(
+			stderr,
+			"ERROR: No implementation this sample type.\n\
+			Accepted types:\n\
+			0: UNIFORM\n\
+			1: PROSAC\n"
+		);
+		return 0;
+	}
 	// The local optimization sampler is used inside the local optimization
 	sampler::UniformSampler local_optimization_sampler(&sample_set);
 
@@ -4409,7 +4435,7 @@ int findRectifyingHomographyScaleOnly_(
 		return 0;
 	}
 
-	preemption::EmptyPreemptiveVerfication<Estimator> preemptive_verification;
+	preemption::EmptyPreemptiveVerfication<Estimator, ScaleBasedRectifyingHomography> preemptive_verification;
 	inlier_selector::EmptyInlierSelector<Estimator, NeighborhoodGraph> inlier_selector(neighborhood_graph.get());
 
 	GCRANSAC<Estimator, NeighborhoodGraph, ScaleBasedRectifyingHomography> gcransac;
@@ -4455,7 +4481,8 @@ int findRectifyingHomographyScaleOnly_(
 int findRectifyingHomographySIFT_(
 	std::vector<double>& features, // input SIFT features
 	std::vector<double>& weights, // input SIFT feature weights
-	double threshold, // threshold for inlier selection
+	double scale_residual_thresh, // threshold for inlier selection
+	double orientation_residual_thresh,
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
 	size_t max_iteration_number,
@@ -4556,11 +4583,20 @@ int findRectifyingHomographySIFT_(
 		return 0;
 	}
 
-    preemption::EmptyPreemptiveVerfication<Estimator> preemptive_verification;
-	inlier_selector::EmptyInlierSelector<Estimator, NeighborhoodGraph> inlier_selector(neighborhood_graph.get());
+	using ResidualType = Eigen::Vector2d;
+    preemption::EmptyPreemptiveVerfication<Estimator, SIFTRectifyingHomography, ResidualType> preemptive_verification;
+	inlier_selector::EmptyInlierSelector<Estimator, NeighborhoodGraph, ResidualType> inlier_selector(neighborhood_graph.get());
 
-	GCRANSAC<Estimator, NeighborhoodGraph, SIFTRectifyingHomography> gcransac;
-	gcransac.settings.threshold = threshold;
+	GCRANSAC<
+		Estimator,
+		NeighborhoodGraph,
+		SIFTRectifyingHomography,
+		MSACScoringFunction<Estimator, ResidualType>,
+		preemption::EmptyPreemptiveVerfication<Estimator, SIFTRectifyingHomography, ResidualType>,
+		inlier_selector::EmptyInlierSelector<Estimator, NeighborhoodGraph, ResidualType>,
+		ResidualType
+	> gcransac;
+	gcransac.settings.threshold = {scale_residual_thresh, orientation_residual_thresh};
 	gcransac.settings.do_local_optimization = true; 
 	gcransac.settings.spatial_coherence_weight = spatial_coherence_weight;
 	gcransac.settings.min_iteration_number = min_iteration_number;

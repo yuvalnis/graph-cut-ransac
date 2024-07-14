@@ -35,6 +35,7 @@
 
 #include <vector>
 #include <numeric>
+#include <Eigen/Dense>
 
 #include "estimators/fundamental_estimator.h"
 #include "estimators/homography_estimator.h"
@@ -118,7 +119,8 @@ namespace gcransac
 		typedef estimator::RectifyingHomographyEstimator<
 			estimator::solver::RectifyingHomographyTwoSIFTSolver,
 			estimator::solver::RectifyingHomographyTwoSIFTSolver,
-			gcransac::SIFTRectifyingHomography
+			gcransac::SIFTRectifyingHomography,
+			Eigen::Vector2d
 		> SIFTBasedRectifyingHomographyEstimator;
 
 		// The default estimator for essential matrix fitting

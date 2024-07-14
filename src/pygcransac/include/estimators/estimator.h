@@ -34,7 +34,7 @@
 #pragma once
 
 #include <vector>
-#include "GCoptimization.h"
+#include "GCoptimization.h" 
 
 namespace gcransac
 {
@@ -45,7 +45,7 @@ namespace gcransac
 		// being used for. Two methods must be implemented: estimateModel and residual. All
 		// other methods are optional, but will likely enhance the quality of the RANSAC
 		// output.
-		template <typename DatumType, typename ModelType> class Estimator
+		template <typename DatumType, typename ModelType, typename ResidualType = double> class Estimator
 		{
 		public:
 			typedef DatumType Datum;
@@ -78,8 +78,8 @@ namespace gcransac
 
 			// Given a model and a data point, calculate the error. Users should implement
 			// this function appropriately for the task being solved.
-			OLGA_INLINE virtual double residual(const Datum& data, const Model& model) const = 0;
-			OLGA_INLINE virtual double squaredResidual(const Datum& data, const Model& model) const = 0;
+			OLGA_INLINE virtual ResidualType residual(const Datum& data, const Model& model) const = 0;
+			OLGA_INLINE virtual ResidualType squaredResidual(const Datum& data, const Model& model) const = 0;
 			
 			// A function to decide if the selected sample is degenerate or not
 			// before calculating the model parameters
@@ -100,7 +100,7 @@ namespace gcransac
 				const Datum& data,
 				const std::vector<size_t> &inliers,
 				const size_t *minimal_sample_,
-				const double threshold_,
+				const ResidualType threshold_,
 				bool &model_updated_) const
 			{
 				return true;

@@ -33,14 +33,15 @@
 // Author: Daniel Barath (barath.daniel@sztaki.mta.hu)
 #pragma once
 
-#include <vector>
 #include <numeric>
+#include <Eigen/Dense>
 
 namespace gcransac
 {
 	namespace utils
 	{
 
+		template <typename ResidualType = double>
 		struct Settings {
 			bool do_final_iterated_least_squares, // Flag to decide a final iterated least-squares fitting is needed to polish the output model parameters.
 				do_local_optimization, // Flag to decide if local optimization is needed
@@ -60,8 +61,9 @@ namespace gcransac
 
 			double confidence, // Required confidence in the result
 				neighborhood_sphere_radius, // The radius of the ball used for creating the neighborhood graph
-				threshold, // The inlier-outlier threshold
 				spatial_coherence_weight; // The weight of the spatial coherence term
+
+			ResidualType threshold; // the inlier-outlier threshold
 
 			Settings() :
 				do_final_iterated_least_squares(true),
@@ -79,10 +81,16 @@ namespace gcransac
 				max_unsuccessful_model_generations(100),
 				core_number(1),
 				spatial_coherence_weight(0.14),
-				threshold(2.0),
 				confidence(0.95)
 			{
-
+				if constexpr (std::is_same_v<ResidualType, double>)
+				{
+					threshold = 2.0;
+				}
+				else
+				{
+					threshold.setConstant(2.0);
+				}
 			}
 		};		
 	}

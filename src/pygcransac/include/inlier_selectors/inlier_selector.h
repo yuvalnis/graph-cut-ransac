@@ -39,8 +39,9 @@ namespace gcransac
 	{
         template <
             typename _Estimator,
-            typename _NeighborhoodStructure>
-        class AbstractInlierSelector
+            typename _NeighborhoodStructure,
+            typename _ResidualType = double
+        > class AbstractInlierSelector
         {
         public:
             explicit AbstractInlierSelector(const _NeighborhoodStructure *kNeighborhoodGraph_)
@@ -57,7 +58,7 @@ namespace gcransac
                 const cv::Mat& kCorrespondences_, // All point correspondences
                 const gcransac::Model& kModel_, // The model parameters
                 const _NeighborhoodStructure& kNeighborhood_, // The neighborhood structure. This probably will be a GridNeighborhood currently.
-                const double& inlierOutlierThreshold_,
+                const _ResidualType& inlierOutlierThreshold_,
                 std::vector<const std::vector<size_t>*>& selectedCells_, // The indices of the points selected
                 size_t& pointNumber_) = 0; 
         };

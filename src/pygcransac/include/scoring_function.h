@@ -71,7 +71,7 @@ namespace gcransac
 		}
 	};
 
-	template<class _ModelEstimator>
+	template<class _ModelEstimator, typename _ResidualType = double>
 	class ScoringFunction
 	{
 	public:
@@ -90,22 +90,22 @@ namespace gcransac
 		virtual OLGA_INLINE Score getScore(const cv::Mat &points_, // The input data points
 			Model &model_, // The current model parameters
 			const _ModelEstimator &estimator_, // The model estimator
-			const double threshold_, // The inlier-outlier threshold
+			const _ResidualType& threshold_, // The inlier-outlier threshold
 			std::vector<size_t> &inliers_, // The selected inliers
 			const Score &best_score_ = Score(), // The score of the current so-far-the-best model
 			const bool store_inliers_ = true, // A flag to decide if the inliers should be stored
 			const std::vector<const std::vector<size_t>*> *index_sets = nullptr) const = 0; // Index sets to be verified
 
-		virtual void initialize(const double threshold_,
-			const size_t point_number_) = 0;
+		virtual void initialize(const _ResidualType& threshold_,
+								const size_t point_number_) = 0;
 
 	};
 
-	template<class _ModelEstimator>
-		class MSACScoringFunction : public ScoringFunction<_ModelEstimator>
+	template<class _ModelEstimator, typename _ResidualType = double>
+		class MSACScoringFunction : public ScoringFunction<_ModelEstimator, _ResidualType>
 	{
 	protected:
-		double squared_truncated_threshold; // Squared truncated threshold
+		_ResidualType squared_truncated_threshold; // Squared truncated threshold
 		size_t point_number; // Number of points
 		// Verify only every k-th point when doing the score calculation. This maybe is beneficial if
 		// there is a time sensitive application and verifying the model on a subset of points
@@ -130,7 +130,7 @@ namespace gcransac
 			verify_every_kth_point = verify_every_kth_point_;
 		}
 
-		void initialize(const double squared_truncated_threshold_,
+		void initialize(const _ResidualType& squared_truncated_threshold_,
 			const size_t point_number_)
 		{
 			squared_truncated_threshold = squared_truncated_threshold_;
@@ -141,7 +141,7 @@ namespace gcransac
 		OLGA_INLINE Score getScore(const cv::Mat& points_, // The input data points
 			Model& model_, // The current model parameters
 			const _ModelEstimator& estimator_, // The model estimator
-			const double threshold_, // The inlier-outlier threshold
+			const _ResidualType& threshold_, // The inlier-outlier threshold
 			std::vector<size_t>& inliers_, // The selected inliers
 			const Score& best_score_ = Score(), // The score of the current so-far-the-best model
 			const bool store_inliers_ = true, // A flag to decide if the inliers should be stored
@@ -150,7 +150,16 @@ namespace gcransac
 			Score score; // The current score
 			if (store_inliers_) // If the inlier should be stored, clear the variables
 				inliers_.clear();
-			double squared_residual; // The point-to-model residual
+
+			_ResidualType inverse_threshs;
+			if constexpr (std::is_same_v<_ResidualType, double>)
+			{
+				inverse_threshs = 1.0 / squared_truncated_threshold;
+			}
+			else
+			{
+				inverse_threshs = squared_truncated_threshold.cwiseInverse();
+			}
 
 			// If the points are not prefiltered into index sets, iterate through all of them.
 			if (index_sets == nullptr)
@@ -158,11 +167,28 @@ namespace gcransac
 				for (int point_idx = 0; point_idx < point_number; point_idx += verify_every_kth_point)
 				{
 					// Calculate the point-to-model residual
-					squared_residual = estimator_.squaredResidual(points_.row(point_idx), model_);
+					auto squared_residuals = estimator_.squaredResidual(
+						points_.row(point_idx), model_
+					);
+					bool all_sqr_thresh_lower_than_residuals = false;
+					double sum_residual_over_thresh = 0.0;
+					if constexpr (std::is_same_v<_ResidualType, double>)
+					{
+						all_sqr_thresh_lower_than_residuals = squared_residuals < squared_truncated_threshold;
+						sum_residual_over_thresh = squared_residuals * inverse_threshs;
+					}
+					else
+					{
+						static_assert(std::is_same<decltype(squared_residuals), _ResidualType>::value,
+									  "Squared residuals type is not the same as squared thresholds type.");
+						Eigen::Array<bool, Eigen::Dynamic, 1> comparison = squared_residuals.array() <= squared_truncated_threshold.array();
+						all_sqr_thresh_lower_than_residuals = comparison.all();
+						sum_residual_over_thresh = squared_residuals.cwiseProduct(inverse_threshs).sum();
+					}
 
 					// If the residual is smaller than the threshold, store it as an inlier and
 					// increase the score.
-					if (squared_residual < squared_truncated_threshold)
+					if (all_sqr_thresh_lower_than_residuals)
 					{
 						if (store_inliers_) // Store the point as an inlier if needed.
 							inliers_.emplace_back(point_idx);
@@ -176,7 +202,7 @@ namespace gcransac
 						// score threshold^2 = threshold^2 - residual^2		->
 						// score threshold^2 - threshold^2 = - residual^2.
 						// This is faster to calculate and it is normalized back afterwards.
-						score.value -= squared_residual; // Truncated quadratic cost
+						score.value -= sum_residual_over_thresh; // Truncated quadratic cost
 						//score.value += 1.0 - squared_residual / squared_truncated_threshold; // Truncated quadratic cost
 					}
 
@@ -191,12 +217,28 @@ namespace gcransac
 					for (const auto point_idx : *current_set)
 					{
 						// Calculate the point-to-model residual
-						squared_residual =
-							estimator_.squaredResidual(points_.row(point_idx), model_);
+						auto squared_residuals = estimator_.squaredResidual(
+							points_.row(point_idx), model_
+						);
+						bool all_sqr_thresh_lower_than_residuals = false;
+						double sum_residual_over_thresh = 0.0;
+						if constexpr (std::is_same_v<_ResidualType, double>)
+						{
+							all_sqr_thresh_lower_than_residuals = squared_residuals < squared_truncated_threshold;
+							sum_residual_over_thresh = squared_residuals * inverse_threshs;
+						}
+						else
+						{
+							static_assert(std::is_same<decltype(squared_residuals), _ResidualType>::value,
+										"Squared residuals type is not the same as squared thresholds type.");
+							Eigen::Array<bool, Eigen::Dynamic, 1> comparison = squared_residuals.array() <= squared_truncated_threshold.array();
+							all_sqr_thresh_lower_than_residuals = comparison.all();
+							sum_residual_over_thresh = squared_residuals.cwiseProduct(inverse_threshs).sum();
+						}
 
 						// If the residual is smaller than the threshold, store it as an inlier and
 						// increase the score.
-						if (squared_residual < squared_truncated_threshold)
+						if (all_sqr_thresh_lower_than_residuals)
 						{
 							if (store_inliers_) // Store the point as an inlier if needed.
 								inliers_.emplace_back(point_idx);
@@ -210,7 +252,7 @@ namespace gcransac
 							// score threshold^2 = threshold^2 - residual^2		->
 							// score threshold^2 - threshold^2 = - residual^2.
 							// This is faster to calculate and it is normalized back afterwards.
-							score.value -= squared_residual; // Truncated quadratic cost
+							score.value -= sum_residual_over_thresh; // Truncated quadratic cost
 							//score.value += 1.0 - squared_residual / squared_truncated_threshold; // Truncated quadratic cost
 						}
 
@@ -224,10 +266,12 @@ namespace gcransac
 
 			// Normalizing the score to get back the original MSAC one.
 			// This is not necessarily needed, but I keep it like this
-			// maybe something will later be built on the exact MSAC score.
-			score.value =
-				(score.value + score.inlier_number * squared_truncated_threshold) /
-				squared_truncated_threshold;
+			// // maybe something will later be built on the exact MSAC score.
+			// score.value =
+			// 	(score.value + score.inlier_number * squared_truncated_threshold) /
+			// 	squared_truncated_threshold;
+
+			score.value += score.inlier_number;
 
 			// Return the final score
 			return score;

@@ -870,13 +870,21 @@ py::tuple findHomography(py::array_t<double>  correspondences_,
 }
 
 py::tuple findRectifyingHomographyScaleOnly(
-	py::array_t<double> features
+	py::array_t<double> features,
+	py::array_t<double> weights,
+	double scale_residual_thresh,
+	double spatial_coherence_weight,
+	size_t min_iteration_number,
+	size_t max_iteration_number,
+	size_t max_local_optimization_number,
+	gcransac::sampler::SamplerType sampler_type
 )
 {
 	constexpr size_t kFeatureSize = 3;
 	constexpr size_t kNumMinFeatures = 3;
 
 	py::buffer_info features_buff = features.request();
+	py::buffer_info weights_buff = weights.request();
 
 	if (features_buff.ndim != 2)
 	{
@@ -895,18 +903,26 @@ py::tuple findRectifyingHomographyScaleOnly(
 				  << num_features << " rows.";
 		throw std::invalid_argument(error_msg.str());
 	}
-	// construct C++ vector for features from python array
-	const auto *features_ptr = static_cast<double*>(features_buff.ptr);
+	// construct C++ vector for features and weights from python array
+	const auto* features_ptr = static_cast<double*>(features_buff.ptr);
+	const auto* weights_ptr = static_cast<double*>(weights_buff.ptr);
 	std::vector<double> cpp_features;
+	std::vector<double> cpp_weights;
 	cpp_features.assign(features_ptr, features_ptr + features_buff.size);
+	cpp_weights.assign(weights_ptr, weights_ptr + weights_buff.size);
 
 	std::vector<double> cpp_homography(9);
     std::vector<bool> cpp_inliers(num_features);
-	std::vector<double> cpp_weights(num_features, 1.0);	// uniform weights for now
 
 	const auto num_inliers = findRectifyingHomographyScaleOnly_(
 		cpp_features,
 		cpp_weights,
+		scale_residual_thresh,
+		spatial_coherence_weight,
+		min_iteration_number,
+		max_iteration_number,
+		max_local_optimization_number,
+		sampler_type,
 		cpp_inliers,
 		cpp_homography
 	);
@@ -938,7 +954,8 @@ py::tuple findRectifyingHomographyScaleOnly(
 py::tuple findRectifyingHomographySIFT(
 	py::array_t<double> features,
 	py::array_t<double> weights,
-	double threshold,
+	double scale_residual_thresh,
+	double orientation_residual_thresh,
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
 	size_t max_iteration_number,
@@ -992,7 +1009,8 @@ py::tuple findRectifyingHomographySIFT(
 	const auto num_inliers = findRectifyingHomographySIFT_(
 		cpp_features,
 		cpp_weights,
-		threshold,
+		scale_residual_thresh,
+		orientation_residual_thresh,
 		spatial_coherence_weight,
 		min_iteration_number,
 		max_iteration_number,
@@ -1223,13 +1241,21 @@ PYBIND11_PLUGIN(pygcransac) {
 		py::arg("solver") = 0);
 
 	m.def("findRectifyingHomographyScaleOnly", &findRectifyingHomographyScaleOnly, R"doc(some doc)doc",
-		py::arg("features")
+		py::arg("features"),
+		py::arg("weights"),
+		py::arg("scale_residual_thresh"),
+		py::arg("spatial_coherence_weight") = 0.0,
+		py::arg("min_iteration_number") = 10000,
+		py::arg("max_iteration_number") = 10000,
+		py::arg("max_local_optimization_number") = 50,
+		py::arg("sampler_type") = gcransac::sampler::SamplerType::Uniform
 	);
 
 	m.def("findRectifyingHomographySIFT", &findRectifyingHomographySIFT, R"doc(some doc)doc",
 		py::arg("features"),
 		py::arg("weights"),
-		py::arg("threshold"),
+		py::arg("scale_residual_thresh"),
+		py::arg("orientation_residual_thresh"),
 		py::arg("spatial_coherence_weight") = 0.0,
 		py::arg("min_iteration_number") = 10000,
 		py::arg("max_iteration_number") = 10000,

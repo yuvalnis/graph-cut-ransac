@@ -41,17 +41,18 @@ namespace gcransac
 {
 	namespace preemption
 	{
-		template <typename _ModelEstimator>
+		template <typename _ModelEstimator, typename _ModelType = Model, typename _ResidualType = double>
 		class EmptyPreemptiveVerfication
 		{
+
 		public:
 			static constexpr bool providesScore() { return false; }
 			static constexpr const char *getName() { return "empty"; }
 
-			bool verifyModel(
-				const gcransac::Model &model_, // The current model
+			static constexpr bool verifyModel(
+				const _ModelType &model_, // The current model
 				const _ModelEstimator &estimator_, // The model estimator
-				const double &threshold_, // The truncated threshold
+				const _ResidualType &threshold_, // The truncated threshold
 				const size_t &iteration_number_, // The current iteration number
 				const Score &best_score_, // The current best score
 				const cv::Mat &points_, // The data points
