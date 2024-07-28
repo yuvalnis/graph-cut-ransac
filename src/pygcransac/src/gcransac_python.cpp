@@ -4439,12 +4439,12 @@ int findRectifyingHomographyScaleOnly_(
 	inlier_selector::EmptyInlierSelector<Estimator, NeighborhoodGraph> inlier_selector(neighborhood_graph.get());
 
 	GCRANSAC<Estimator, NeighborhoodGraph, ScaleBasedRectifyingHomography> gcransac;
-	// TODO pass functions arguments to configure GC-RANSAC
-	// gcransac.settings.threshold = threshold;
-
-	// without this flag the code fails because the empty neighborhood is access,
-	// resulting in a segmentation flow.
-	gcransac.settings.do_local_optimization = false; 
+	gcransac.settings.threshold = scale_residual_thresh;
+	gcransac.settings.do_local_optimization = true; 
+	gcransac.settings.spatial_coherence_weight = spatial_coherence_weight;
+	gcransac.settings.min_iteration_number = min_iteration_number;
+	gcransac.settings.max_iteration_number = max_iteration_number;
+	gcransac.settings.max_local_optimization_number = max_local_optimization_number;
 
 	ScaleBasedRectifyingHomography model;
 	gcransac.run(
@@ -4498,10 +4498,9 @@ int findRectifyingHomographySIFT_(
 	if (features.empty() || features.size() % kFeatureSize != 0)
 	{
 		fprintf(stderr,
-			"The container of SIFT features should have a non-zero size which \
-            is a multiple of %lu. Its size is %lu.\n",
-			kFeatureSize,
-			features.size()
+			"The container of SIFT features should have a non-zero size which "
+            "is a multiple of %lu. Its size is %lu.\n",
+			kFeatureSize, features.size()
 		);
 		return 0;
 	}
@@ -4509,11 +4508,10 @@ int findRectifyingHomographySIFT_(
 	const auto num_features = features.size() / kFeatureSize;
 	if (num_features != weights.size())
 	{
-		fprintf(
-			stderr,
-			"The number of weights (%lu) is different than the number of features (%lu).\n",
-			weights.size(),
-			num_features
+		fprintf(stderr,
+			"The number of weights (%lu) is different than the number of "
+			"features (%lu).\n",
+			weights.size(), num_features
 		);
 		return 0;
 	}
@@ -4555,12 +4553,11 @@ int findRectifyingHomographySIFT_(
 	default:
 		NeighborhoodGraph *neighborhood_graph_ptr = neighborhood_graph.release();
 		delete neighborhood_graph_ptr;
-		fprintf(
-			stderr,
-			"ERROR: No implementation this sample type.\n\
-			Accepted types:\n\
-			0: UNIFORM\n\
-			1: PROSAC\n"
+		fprintf(stderr,
+			"ERROR: No implementation this sample type.\n"
+			"Accepted types:\n"
+			"0: Uniform\n"
+			"1: ProSaC\n"
 		);
 		return 0;
 	}
@@ -4619,16 +4616,25 @@ int findRectifyingHomographySIFT_(
 			homography[i * 3 + j] = H(i, j);
 		}	
 	}
-	// denormalize vanishing points (they are computed in the normalized 
-	// coordinate-system in the non-minimal)
-	model.denormalize(model.vp1);
-	model.denormalize(model.vp2);
-	// store coordinates of vanishing points as two concatenated column-vectors
+	// Compute the two orthogonal vanishing points in the rectified image.
+	const auto c1 = std::cos(model.vanishing_point_dir1);
+	const auto s1 = std::sin(model.vanishing_point_dir1);
+	const auto c2 = std::cos(model.vanishing_point_dir2);
+	const auto s2 = std::sin(model.vanishing_point_dir2);
+	Eigen::Vector3d vp1(c1, s1, 0.0);
+	Eigen::Vector3d vp2(c2, s2, 0.0);
+	if (std::fabs(vp1.dot(vp2)) > 1e-9)
+	{
+		fprintf(stderr, "ERROR: rectified vanishing points should be orthogonal!\n");
+	}
+	// Warp vanishing points as the output is the vanishing points in the warped image.
+	vp1 = H * vp1;
+	vp2 = H * vp2;
 	vanishing_points.resize(6);
 	for (size_t i = 0; i < 3; i++)
 	{
-		vanishing_points[2 * i] = model.vp1(i);
-		vanishing_points[2 * i + 1] = model.vp2(i);
+		vanishing_points[2 * i] = vp1(i);
+		vanishing_points[2 * i + 1] = vp2(i);
 	}
 
     inliers.resize(num_features, false);

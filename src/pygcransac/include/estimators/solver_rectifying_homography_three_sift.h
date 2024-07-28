@@ -1,7 +1,9 @@
 #pragma once
 
+#include <vector>
+#include <optional>
+#include <cmath>
 #include "solver_engine.h"
-#include "homography_estimator.h"
 #include "math_utils.h"
 
 namespace gcransac::estimator::solver
@@ -65,6 +67,9 @@ public:
 protected:
     static constexpr double kScalePower = -1.0 / 3.0;
     static constexpr double kEpsilon = 1e-9;
+    static constexpr size_t x_pos = 0; // x-coordinate position
+    static constexpr size_t y_pos = 1; // y-coordinate position
+    static constexpr size_t s_pos = 2; // scale position
 
     bool estimateNonMinimalModel(
         const cv::Mat &data_,
@@ -131,9 +136,8 @@ bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
     model.h7 = x(0);
     model.h8 = x(1);
     model.alpha = x(2);
-    if (std::abs(model.alpha) < kEpsilon)
+    if (model.alpha < kEpsilon)
     {
-        fprintf(stderr, "Invalid solution for the minimal case: alpha is zero\n");
         return false;
     }
     models_.emplace_back(model);
@@ -184,9 +188,8 @@ bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
     model.h7 = x(0);
     model.h8 = x(1);
     model.alpha = x(2);
-    if (std::abs(model.alpha) < kEpsilon)
+    if (model.alpha < kEpsilon)
     {
-        fprintf(stderr, "Invalid solution for the minimal case: alpha is zero\n");
         return false;
     }
     models_.emplace_back(model);
@@ -222,33 +225,22 @@ double RectifyingHomographyThreeSIFTSolver::residual(
     const ScaleBasedRectifyingHomography& model
 )
 {
-    // Normalized model: parameters are in the normalized image coordinate system
-    const auto alpha = model.alpha;
-    // Unnormalized feature: parameters are in the unnormalized input image coordinate system
     const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
-    double s = feature_ptr[2];
-    // the scale change which fits the model
-    Eigen::Vector3d point(feature_ptr[0], feature_ptr[1], 1.0);
+    Eigen::Vector3d point(feature_ptr[x_pos], feature_ptr[y_pos], 1.0);
+    double scale = feature_ptr[s_pos];
+    // Normalize coordinates and scale
     model.normalize(point);
-    s *= model.s;
-    model.rectify(point);
-    // point(2) = h7 * x' + h8 * y' + 1, where (x', y') are normalized coordinates
-    if (std::abs(point(2)) < kEpsilon)
-    {
-        // an estimated rectifying homography which sends a detected feature 
-        // to infinity must be wrong
-        return DBL_MAX;
-    }
-    const auto model_s = std::pow(alpha / point(2), 3.0);
-    // scale-based residual: the deviation between the input scale and the model scale
-    if (std::abs(model_s) < kEpsilon)
-    {
-        // an estimated rectifying homography should not allow a point with
-        // zero scale change
-        return DBL_MAX;
-    }
-    const auto r_scale = std::abs(1.0 - (s / model_s));
-    
+    model.normalizeScale(scale);
+    // Rectify scale.
+    const auto rectified_scale = model.rectifiedScale(
+        point(0), point(1), scale
+    );
+    // the model's estimation of the feature's cubed-scale in the rectified image
+    const auto alpha_cube = std::pow(model.alpha, 3.0);
+    // scale-based residual: logarithmic scale difference between the feature's
+    // rectified scale and the model's estimated rectified scale for all features.
+    const auto r_scale = std::fabs(std::log(rectified_scale / alpha_cube));
+
     return r_scale;
 }
 
