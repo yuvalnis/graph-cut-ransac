@@ -1,5 +1,8 @@
 #pragma once
 
+#include <vector>
+#include <optional>
+#include <cmath>
 #include "solver_engine.h"
 #include "math_utils.h"
 
@@ -66,6 +69,12 @@ public:
 protected:
     static constexpr double kScalePower = -1.0 / 3.0;
     static constexpr double kEpsilon = 1e-9;
+    static constexpr double kCircularStdDevThresh = M_PI / 18.0; // 10 degrees
+    static constexpr double kCircularVarThresh = kCircularStdDevThresh * kCircularStdDevThresh;
+    static constexpr size_t x_pos = 0; // x-coordinate position
+    static constexpr size_t y_pos = 1; // y-coordinate position
+    static constexpr size_t t_pos = 2; // orientation position
+    static constexpr size_t s_pos = 3; // scale position
 
     bool estimateNonMinimalModel(
         const cv::Mat &data_,
@@ -83,37 +92,27 @@ protected:
     ) const;
 };
 
-void lineFromSIFT(double x, double y, double theta, Eigen::Vector3d& line)
+Eigen::Vector3d lineFromSIFT(double x, double y, double theta)
 {
     const auto c = std::cos(theta);
     const auto s = std::sin(theta);
-    line(0) = s;
-    line(1) = -c;
-    line(2) = y * c - x * s;
+    return {s, -c, y * c - x * s};
 }
 
-bool orthogonalVanishingPoint(
-    const Eigen::Vector3d& vp,
-    const SIFTRectifyingHomography& model,
-    Eigen::Vector3d& result
-)
+/// @brief Computes the minimal angular difference between two angles while
+/// treating each angle and its opposite angle as equivalent.
+/// @param angle1 first angle as angle in range [0, 2 * PI)
+/// @param angle2 second angle as angle in range [0, 2 * PI)
+/// @return The minimal angular difference between the two angles.
+double absoluteAngleDiff(const double& angle1, const double& angle2)
 {
-    Eigen::Vector3d vp_rect = vp;
-    model.rectify(vp_rect);
-    if (std::abs(vp_rect(2)) > 1e-6)
-    {
-        fprintf(
-            stderr,
-            "Rectified vanishing point should be at infinity (homogeneous coordinate should be zero, but instead its value is %f).\n",
-            vp_rect(2)
-        );
-        return false;
-    }
-    result(0) = vp_rect(1); // x <-- y
-    result(1) = -vp_rect(0); // y <-- -x
-    result(2) = 0.0;
-    model.unrectify(result);
-    return true;
+    constexpr auto kTwoPI = 2.0 * M_PI;
+    auto diff1 = std::fabs(angle1 - angle2);
+    auto diff2 = std::fabs(angle1 - angle2 - M_PI); // flipping second orientation
+    return std::fmin(
+        std::fmin(diff1, kTwoPI - diff1),
+        std::fmin(diff2, kTwoPI - diff2)
+    );
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
@@ -144,16 +143,16 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     Eigen::Matrix<double, 3, 4> coeffs;
 
     const auto* sample1 = get_sample_ptr(0); // first sample
-    const auto x1 = sample1[0]; // first x-coordinate
-    const auto y1 = sample1[1]; // first y-coordinate
-    const auto t1 = sample1[2]; // first orientation
-    const auto s1 = sample1[3]; // first scale
+    const auto x1 = sample1[x_pos]; // first x-coordinate
+    const auto y1 = sample1[y_pos]; // first y-coordinate
+    const auto t1 = sample1[t_pos]; // first orientation
+    const auto s1 = sample1[s_pos]; // first scale
 
     const auto* sample2 = get_sample_ptr(1); // second sample
-    const auto x2 = sample2[0]; // second x-coordinate
-    const auto y2 = sample2[1]; // second y-coordinate
-    const auto t2 = sample2[2]; // second orientation
-    const auto s2 = sample2[3]; // second scale
+    const auto x2 = sample2[x_pos]; // second x-coordinate
+    const auto y2 = sample2[y_pos]; // second y-coordinate
+    const auto t2 = sample2[t_pos]; // second orientation
+    const auto s2 = sample2[s_pos]; // second scale
 
     // first line in coefficient matrix is constructed from the first sample only
     coeffs(0, 0) = x1;
@@ -168,10 +167,8 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     coeffs(1, 3) = -1.0;
 
     // third line in the coefficient matrix is constructed from both samples
-    Eigen::Vector3d l1;
-    lineFromSIFT(x1, y1, t1, l1);
-    Eigen::Vector3d l2;
-    lineFromSIFT(x2, y2, t2, l2);
+    const auto l1 = lineFromSIFT(x1, y1, t1);
+    const auto l2 = lineFromSIFT(x2, y2, t2);
     auto vp = l1.cross(l2); // intersection of lines
 
     coeffs(2, 0) = vp(0);
@@ -190,18 +187,56 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     model.h7 = x(0);
     model.h8 = x(1);
     model.alpha = x(2);
-    if (std::abs(model.alpha) < kEpsilon)
-    {
-        fprintf(stderr, "Invalid solution for the minimal case: alpha is zero\n");
-        return false;
-    }
-    model.vp1 = vp;
-    if (!orthogonalVanishingPoint(model.vp1, model, model.vp2))
+    if (model.alpha < kEpsilon)
     {
         return false;
     }
+    const auto rectified_t1 = fmod(model.rectifiedAngle(x1, y1, t1), M_PI);
+    const auto rectified_t2 = fmod(model.rectifiedAngle(x2, y2, t2), M_PI);
+    if (absoluteAngleDiff(rectified_t1, rectified_t2) > M_PI / 180.0)
+    {
+        fprintf(
+            stderr, 
+            "Invalid solution for the minimal case: rectified angles are not "
+            "parallel (angle #1: %f, angle #2: %f).\n",
+            rectified_t1, rectified_t2
+        );
+        return false;
+    }
+    model.vanishing_point_dir1 = 0.5 * (rectified_t1 + rectified_t2);
+    // the second vanishing point's direction is orthogonal to the first.
+    model.vanishing_point_dir2 = fmod(model.vanishing_point_dir1 + M_PI_2, M_PI);
     models_.emplace_back(model);
     return true;
+} 
+
+/// @brief Estimates the mode (most probable value) of the distribution from
+/// which the angle samples where taken. This is done by placing the samples
+/// in bins and finding the most frequent one. This functions treat an angle
+/// theta and theta + PI as the same orientation.
+/// @param angles a vector of angles in radians in range [0, 2 * PI).
+/// @param bin_width the width of the bins (must be a positive number).
+/// @return a scalar represeting the estimate mode of the sampled distribution.
+double findMode(const std::vector<double>& angles, double bin_width) {
+    // Map to store the count of angles in each bin
+    std::map<int, int> bin_counts;
+    // Iterate over each angle and assign it to a bin
+    for (const double& angle : angles) {
+        int bin = static_cast<int>(fmod(angle, M_PI) / bin_width);
+        bin_counts[bin]++;
+    }
+    // Find the bin with the maximum count
+    int max_count = 0;
+    int mode_bin = 0;
+    for (const auto& pair : bin_counts) {
+        if (pair.second > max_count) {
+            max_count = pair.second;
+            mode_bin = pair.first;
+        }
+    }
+    // Calculate the center of the mode bin
+    double mode = mode_bin * bin_width + bin_width / 2.0;
+    return mode;
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
@@ -212,6 +247,8 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     const double* weights_
 ) const
 {
+    using namespace std;
+    constexpr auto kBinWidth = M_PI / 360.0; // half-degree in radians
     // helper function to fetch correct sample
     auto get_sample_ptr = [sample_, &data_](size_t i) {
         const auto *data_ptr = reinterpret_cast<double*>(data_.data);
@@ -221,16 +258,16 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
 
     const size_t n_rows = (sample_number_ * (sample_number_ + 1)) / 2;
     Eigen::MatrixXd coeffs(n_rows, 3);
-    Eigen::MatrixXd rhs(n_rows, 1);
+    Eigen::VectorXd rhs(n_rows, 1);
     // populate first sample_number_ rows of coeffs and rhs matrices with the
     // constraints derived from positions and scales
     size_t curr_idx = 0;
     for (size_t i = 0; i < sample_number_; ++i)
     {
         const auto* sample = get_sample_ptr(i); // first sample
-        const auto x = sample[0]; // first x-coordinate
-        const auto y = sample[1]; // first y-coordinate
-        const auto s = sample[3]; // first scale
+        const auto x = sample[x_pos]; // first x-coordinate
+        const auto y = sample[y_pos]; // first y-coordinate
+        const auto s = sample[s_pos]; // first scale
 
         coeffs(curr_idx, 0) = x;
         coeffs(curr_idx, 1) = y;
@@ -242,24 +279,31 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
 
     // populate last "sample_number_ choose 2" rows of coeffs and rhs matrices
     // with the constraints derived from positions and orientations
-    Eigen::Vector3d li;
-    Eigen::Vector3d lj;
+    vector<optional<Eigen::Vector3d>> lines{sample_number_, nullopt};
     for (size_t i = 0; i < sample_number_ - 1; ++i)
     {
-        const auto* sample_i = get_sample_ptr(i); // first sample
-        const auto xi = sample_i[0]; // i-th x-coordinate
-        const auto yi = sample_i[1]; // i-th y-coordinate
-        const auto ti = sample_i[2]; // i-th orientation
-        lineFromSIFT(xi, yi, ti, li);
+        if (!lines.at(i).has_value())
+        {
+            const auto* sample_i = get_sample_ptr(i); // first sample
+            const auto xi = sample_i[x_pos]; // i-th x-coordinate
+            const auto yi = sample_i[y_pos]; // i-th y-coordinate
+            const auto ti = sample_i[t_pos]; // i-th orientation
+            lines.at(i).emplace(lineFromSIFT(xi, yi, ti));
+        }
 
         for (size_t j = i + 1; j < sample_number_; ++j)
         {
-            const auto* sample_j = get_sample_ptr(j); // first sample
-            const auto xj = sample_j[0]; // j-th x-coordinate
-            const auto yj = sample_j[1]; // j-th y-coordinate
-            const auto tj = sample_j[2]; // j-th orientation
+            if (!lines.at(j).has_value())
+            {
+                const auto* sample_j = get_sample_ptr(j); // first sample
+                const auto xj = sample_j[x_pos]; // j-th x-coordinate
+                const auto yj = sample_j[y_pos]; // j-th y-coordinate
+                const auto tj = sample_j[t_pos]; // j-th orientation
+                lines.at(j).emplace(lineFromSIFT(xj, yj, tj));
+            }
 
-            lineFromSIFT(xj, yj, tj, lj);
+            const auto& li = lines.at(i).value();
+            const auto& lj = lines.at(j).value();
             auto vp = li.cross(lj); // intersection of lines
             // rescale homogeneous vanishing point to scale coefficients to
             // range [-1, 1]
@@ -290,19 +334,22 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     model.h7 = x(0);
     model.h8 = x(1);
     model.alpha = x(2);
-    if (std::abs(model.alpha) < kEpsilon)
+    if (model.alpha < kEpsilon)
     {
-        fprintf(stderr, "Invalid solution for the non-minimal case: alpha is zero\n");
-        // std::cout << "\nNon-minimal solution with zero alpha:\n"
-        //           << "Number of samples: " << sample_number_ << "\n"
-        //           << "coefficient matrix:\n" << coeffs << "\n"
-        //           << "RHS: " << rhs.transpose() << "\n"
-        //           << "x: " << x.transpose() << "\n";
         return false;
     }
-    // TODO update vanishing points in model
-    model.vp1 << 0, 0, 0;
-    model.vp2 << 0, 0, 0;
+    std::vector<double> rectified_angles(sample_number_, 0.0);
+    for (size_t i = 0; i < sample_number_; ++i)
+    {
+        const auto* sample = get_sample_ptr(i); // first sample
+        const auto x = sample[x_pos]; // x-coordinate
+        const auto y = sample[y_pos]; // y-coordinate
+        const auto t = sample[t_pos]; // orientation
+        rectified_angles.at(i) = model.rectifiedAngle(x, y, t);
+    }
+    model.vanishing_point_dir1 = findMode(rectified_angles, kBinWidth);
+    // the second vanishing point's direction is orthogonal to the first.
+    model.vanishing_point_dir2 = fmod(model.vanishing_point_dir1 + M_PI_2, M_PI);
     models_.emplace_back(model);
     return true;
 }
@@ -336,46 +383,33 @@ Eigen::Vector2d RectifyingHomographyTwoSIFTSolver::residual(
     const SIFTRectifyingHomography& model
 )
 {
-    Eigen::Vector2d residuals;
-    // Normalized model: parameters are in the normalized image coordinate system
-    const auto alpha = model.alpha;
-    const auto& vp1 = model.vp1;
-    const auto& vp2 = model.vp2;
-    // Unnormalized feature: parameters are in the unnormalized input image coordinate system
     const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
-    const double orientation = feature_ptr[2];
-    double s = feature_ptr[3];
-    // the scale change which fits the model
-    Eigen::Vector3d point(feature_ptr[0], feature_ptr[1], 1.0);
+    Eigen::Vector3d point(feature_ptr[x_pos], feature_ptr[y_pos], 1.0);
+    double scale = feature_ptr[s_pos];
+    // Normalize coordinates and scale (orientation is unchanged by normalization).
     model.normalize(point);
-    s *= model.s;
-    // line induced by coordinates and orientation
-    Eigen::Vector3d line;
-    lineFromSIFT(point(0), point(1), orientation, line); // compute before applying the homography to the point
-    model.rectify(point);
-    // point(2) = h7 * x' + h8 * y' + 1, where (x', y') are normalized coordinates
-    if (std::abs(point(2)) < kEpsilon)
-    {
-        // an estimated rectifying homography which sends a detected feature 
-        // to infinity must be wrong
-        residuals(0) = DBL_MAX;
-    }
-    const auto model_s = std::pow(alpha / point(2), 3.0);
-    // scale-based residual: the deviation between the input scale and the model scale
-    if (std::abs(model_s) < kEpsilon)
-    {
-        // an estimated rectifying homography should not allow a point with
-        // zero scale change
-        residuals(0) = DBL_MAX;
-    }
-    residuals(0) = std::abs(1.0 - (s / model_s));
-    // orientation-based residual: the minimal Euclidean distance between the
-    // line and the two vanishing points
-    const auto d1 = std::abs(line.dot(vp1));
-    const auto d2 = std::abs(line.dot(vp2));
-    residuals(1) = std::min(d1, d2);
-    
-    return residuals;
+    model.normalizeScale(scale);
+    // Rectify orientation and scale.
+    const auto rectified_orientation = model.rectifiedAngle(
+        point(0), point(1), feature_ptr[t_pos]
+    );
+    const auto rectified_scale = model.rectifiedScale(
+        point(0), point(1), scale
+    );
+    // the model's estimation of the feature's cubed-scale in the rectified image
+    const auto alpha_cube = std::pow(model.alpha, 3.0);
+    // scale-based residual: logarithmic scale difference between the feature's
+    // rectified scale and the model's estimated rectified scale for all features.
+    const auto r_scale = std::fabs(std::log(rectified_scale / alpha_cube));
+    // orientation-based residual: the minimal angular distance between the
+    // feature's rectified orientation and the model's two orthogonal principle
+    // orientations.  
+    const auto r_orientation = std::fmin(
+        absoluteAngleDiff(model.vanishing_point_dir1, rectified_orientation),
+        absoluteAngleDiff(model.vanishing_point_dir2, rectified_orientation)
+    );
+
+    return {r_scale, r_orientation};
 }
 
 bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
@@ -386,10 +420,6 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
     NormalizingTransform& normalizing_transform // the normalization transformation model
 ) const
 {
-    constexpr size_t x_pos = 0;
-    constexpr size_t y_pos = 1;
-    constexpr size_t t_pos = 2;
-    constexpr size_t s_pos = 3;
     if (sample_number < 1)
     {
         fprintf(stderr,

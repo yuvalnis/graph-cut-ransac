@@ -196,6 +196,7 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 	double h7 = 0.0;
 	double h8 = 0.0;
 	// feature-class scale (varies between different classes of features)
+	// this is the relative scale of the recitified features.
 	double alpha = 1.0;
 
 	void rectify(Eigen::Vector3d& p) const
@@ -208,6 +209,21 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 		// negating h7 and h8 is equivalent to inverting the rectifying
 		// homography matrix in this case
 		p(2) = -h7 * p(0) - h8 * p(1) + p(2);
+	}
+
+	double rectifiedAngle(const double& x, const double& y, const double& angle) const
+	{
+		constexpr double kTwoPI = 2.0 * M_PI;
+		const auto c = std::cos(angle);
+   		const auto s = std::sin(angle);
+		const auto numer = (x * s - y * c) * h7 + s;
+		const auto denom = (-x * s + y * c) * h8 + c;
+		return fmod(std::atan2(numer, denom), kTwoPI);
+	}
+
+	double rectifiedScale(const double& x, const double& y, const double& scale) const
+	{
+		return scale * std::pow(h7 * x + h8 * y + 1.0, 3.0);
 	}
 
 	Eigen::Matrix3d getHomography() const
@@ -226,11 +242,10 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 
 struct SIFTRectifyingHomography : public ScaleBasedRectifyingHomography
 {
-	// vanishing point in the original image used to estimate model
-	Eigen::Vector3d vp1 = Eigen::Vector3d::Zero(); 
-	// vanishing point in the original image, such that when rectified it is
-	// orthogonal to the first vanishing point (also rectified).
-	Eigen::Vector3d vp2 = Eigen::Vector3d::Zero();
+	// The orthogonal directions (in radians) of the vanishing points, used to
+	// estimate the model, in the rectified image.
+	double vanishing_point_dir1 = 0.0;
+	double vanishing_point_dir2 = 0.0;
 };
 
 }
