@@ -1087,7 +1087,7 @@ namespace gcransac
 				auto residuals = estimator_.residual(points_.row(point_idx), model_);
 				static_assert(std::is_same<decltype(residuals), _ResidualType>::value, "Residuals type is not the same as thresholds type.");
 				Eigen::Array<bool, Eigen::Dynamic, 1> comparison = residuals.array() <= threshold_.array();
-				if (comparison.all())
+				if (comparison.any())
 				{
 					inliers_.emplace_back(point_idx);
 				}
