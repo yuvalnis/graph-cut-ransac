@@ -701,6 +701,12 @@ int findHomographySIFT_(
 int findRectifyingHomographyScaleOnly_(
 	std::vector<double>& features,	// input SIFT features
 	std::vector<double>& weights,	// input SIFT feature weights
+	double scale_residual_thresh, // threshold for inlier selection
+	double spatial_coherence_weight,
+	size_t min_iteration_number,
+	size_t max_iteration_number,
+	size_t max_local_optimization_number,
+	gcransac::sampler::SamplerType sampler_type,
 	std::vector<bool>& inliers,	// output inlier boolean mask
 	std::vector<double>& homography	// output homography
 );
@@ -708,7 +714,8 @@ int findRectifyingHomographyScaleOnly_(
 int findRectifyingHomographySIFT_(
 	std::vector<double>& features,	// input SIFT features
 	std::vector<double>& weights,	// input SIFT feature weights
-	double threshold, // threshold for inlier selection
+	double scale_residual_thresh, // thresholds for inlier selection
+	double orientation_residual_thresh,
 	double spatial_coherence_weight, // the spatial coherence weight used in the local optimization
 	size_t min_iteration_number, // minimum iteration number. value equal or higher to 50 is recommended
 	size_t max_iteration_number, // maximum iteration number. value equal or higher to 1000 is recommended

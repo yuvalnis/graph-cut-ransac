@@ -20,8 +20,9 @@ namespace gcransac::estimator
 template<
     class _MinimalSolverEngine, // The solver used for estimating the model from a minimal sample
     class _NonMinimalSolverEngine, // The solver used for estimating the model from a non-minimal sample
-    class _ModelType
-> class RectifyingHomographyEstimator : public Estimator<cv::Mat, _ModelType>
+    class _ModelType,
+    typename _ResidualType = double
+> class RectifyingHomographyEstimator : public Estimator<cv::Mat, _ModelType, _ResidualType>
 {
 protected:
     // Minimal solver engine used for estimating a model from a minimal sample
@@ -142,7 +143,7 @@ public:
         return true;
     }
  
-    OLGA_INLINE double residual(
+    OLGA_INLINE _ResidualType residual(
         const cv::Mat& feature_,
         const _ModelType& model_
     ) const
@@ -150,13 +151,21 @@ public:
         return _MinimalSolverEngine::residual(feature_, model_);
     }
 
-    OLGA_INLINE double squaredResidual(
+    OLGA_INLINE _ResidualType squaredResidual(
         const cv::Mat& feature_,
         const _ModelType& model_
     ) const
     {
-        const auto r = residual(feature_, model_);
-        return r * r;
+        auto r = residual(feature_, model_);
+        if constexpr (std::is_same_v<_ResidualType, double>)
+		{
+            r = r * r;
+        }
+        else
+        {
+            r = r.cwiseProduct(r);
+        }
+        return r;
     }
 };
 

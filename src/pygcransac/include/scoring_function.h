@@ -71,7 +71,7 @@ namespace gcransac
 		}
 	};
 
-	template<class _ModelEstimator>
+	template<class _ModelEstimator, typename _ResidualType = double>
 	class ScoringFunction
 	{
 	public:
@@ -87,25 +87,27 @@ namespace gcransac
 
 		}
 
-		virtual OLGA_INLINE Score getScore(const cv::Mat &points_, // The input data points
+		virtual OLGA_INLINE Score getScore(
+			const cv::Mat &points_, // The input data points
 			Model &model_, // The current model parameters
 			const _ModelEstimator &estimator_, // The model estimator
-			const double threshold_, // The inlier-outlier threshold
+			const _ResidualType& threshold_, // The inlier-outlier threshold
 			std::vector<size_t> &inliers_, // The selected inliers
 			const Score &best_score_ = Score(), // The score of the current so-far-the-best model
 			const bool store_inliers_ = true, // A flag to decide if the inliers should be stored
-			const std::vector<const std::vector<size_t>*> *index_sets = nullptr) const = 0; // Index sets to be verified
+			const std::vector<const std::vector<size_t>*> *index_sets = nullptr // Index sets to be verified
+		) const = 0;
 
-		virtual void initialize(const double threshold_,
-			const size_t point_number_) = 0;
+		virtual void initialize(const _ResidualType& threshold_,
+								const size_t point_number_) = 0;
 
 	};
 
-	template<class _ModelEstimator>
-		class MSACScoringFunction : public ScoringFunction<_ModelEstimator>
+	template<class _ModelEstimator, typename _ResidualType = double>
+		class MSACScoringFunction : public ScoringFunction<_ModelEstimator, _ResidualType>
 	{
 	protected:
-		double squared_truncated_threshold; // Squared truncated threshold
+		_ResidualType squared_truncated_threshold; // Squared truncated threshold
 		size_t point_number; // Number of points
 		// Verify only every k-th point when doing the score calculation. This maybe is beneficial if
 		// there is a time sensitive application and verifying the model on a subset of points
@@ -130,22 +132,24 @@ namespace gcransac
 			verify_every_kth_point = verify_every_kth_point_;
 		}
 
-		void initialize(const double squared_truncated_threshold_,
-			const size_t point_number_)
+		void initialize(
+			const _ResidualType& squared_truncated_threshold_,
+			const size_t point_number_
+		)
 		{
 			squared_truncated_threshold = squared_truncated_threshold_;
 			point_number = point_number_;
 		}
 
-		// Return the score of a model w.r.t. the data points and the threshold
-		OLGA_INLINE Score getScore(const cv::Mat& points_, // The input data points
+		Score getScoreSingleResidual(
+			const cv::Mat& points_, // The input data points
 			Model& model_, // The current model parameters
 			const _ModelEstimator& estimator_, // The model estimator
-			const double threshold_, // The inlier-outlier threshold
 			std::vector<size_t>& inliers_, // The selected inliers
-			const Score& best_score_ = Score(), // The score of the current so-far-the-best model
-			const bool store_inliers_ = true, // A flag to decide if the inliers should be stored
-			const std::vector<const std::vector<size_t>*> *index_sets = nullptr) const // Index sets to be verified
+			const Score& best_score_, // The score of the current so-far-the-best model
+			const bool store_inliers_, // A flag to decide if the inliers should be stored
+			const std::vector<const std::vector<size_t>*> *index_sets // Index sets to be verified
+		) const
 		{
 			Score score; // The current score
 			if (store_inliers_) // If the inlier should be stored, clear the variables
@@ -231,6 +235,120 @@ namespace gcransac
 
 			// Return the final score
 			return score;
+		}
+
+		void updateScoreWithFeature(
+			const cv::Mat& points_,
+			size_t point_idx_,
+			Model& model_,
+			const _ModelEstimator& estimator_,
+			std::vector<size_t>& inliers_,
+			const bool store_inliers_,
+			Score& score_
+		) const
+		{
+			const auto squared_residuals = estimator_.squaredResidual(
+				points_.row(point_idx_), model_
+			);
+			// static_assert(
+			// 	std::is_same<decltype(squared_residuals), decltype(squared_truncated_threshold)>::value,
+			// 	"Squared residuals type is not the same as squared thresholds type."
+			// );
+			const Eigen::Array<bool, Eigen::Dynamic, 1> comparison = squared_residuals.array() <= squared_truncated_threshold.array();
+
+			if (store_inliers_ && comparison.any())
+			{
+				inliers_.emplace_back(point_idx_);
+				++(score_.inlier_number);
+			}
+			for (size_t i = 0; i < comparison.size(); i++)
+			{
+				if (comparison(i))
+				{
+					score_.value += 1.0 - (squared_residuals(i) / squared_truncated_threshold(i));
+				}
+			}
+		}
+
+		Score getScoreMultipleResiduals(
+			const cv::Mat& points_, // The input data points
+			Model& model_, // The current model parameters
+			const _ModelEstimator& estimator_, // The model estimator
+			std::vector<size_t>& inliers_, // The selected inliers
+			const Score& best_score_, // The score of the current so-far-the-best model
+			const bool store_inliers_, // A flag to decide if the inliers should be stored
+			const std::vector<const std::vector<size_t>*> *index_sets // Index sets to be verified
+		) const
+		{
+			Score score;
+
+			if (store_inliers_)
+			{
+				inliers_.clear();
+			}
+
+			// If the points are not prefiltered into index sets, iterate through all of them.
+			if (index_sets == nullptr)
+			{
+				// Iterate through all points, calculate the squared_residuals and store the points as inliers if needed.
+				for (size_t point_idx = 0; point_idx < point_number; point_idx += verify_every_kth_point)
+				{
+					updateScoreWithFeature(
+						points_, point_idx, model_, estimator_, inliers_,
+						store_inliers_, score
+					);
+				}
+			}
+			else
+			{
+				// Iterating through the index sets
+				for (const auto &current_set : *index_sets)
+				{
+					// Iterating through the point indices in the current set
+					for (const auto point_idx : *current_set)
+					{
+						updateScoreWithFeature(
+							points_, point_idx, model_, estimator_, inliers_,
+							store_inliers_, score
+						);
+					}
+				}
+			}
+
+			if (score.inlier_number == 0)
+			{
+				score.value = 0;
+			}
+
+			return score;
+		}
+
+		// Return the score of a model w.r.t. the data points and the threshold
+		OLGA_INLINE Score getScore(
+			const cv::Mat& points_, // The input data points
+			Model& model_, // The current model parameters
+			const _ModelEstimator& estimator_, // The model estimator
+			const _ResidualType& threshold_, // The inlier-outlier threshold
+			std::vector<size_t>& inliers_, // The selected inliers
+			const Score& best_score_ = Score(), // The score of the current so-far-the-best model
+			const bool store_inliers_ = true, // A flag to decide if the inliers should be stored
+			const std::vector<const std::vector<size_t>*> *index_sets = nullptr // Index sets to be verified
+		) const
+		{
+			if constexpr (std::is_same_v<_ResidualType, double>)
+			{
+				return getScoreSingleResidual(
+					points_, model_, estimator_, inliers_,
+					best_score_, store_inliers_, index_sets
+				);
+			}
+			else
+			{
+				return getScoreMultipleResiduals(
+					points_, model_, estimator_, inliers_,
+					best_score_, store_inliers_, index_sets
+				);
+			}
 		}
 	};
 

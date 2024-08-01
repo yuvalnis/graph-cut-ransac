@@ -50,7 +50,7 @@ public:
         const double *weights_ = nullptr
     ) const;
 
-    static double residual(
+    static Eigen::Vector2d residual(
         const cv::Mat& feature,
         const SIFTRectifyingHomography& model
     );
@@ -331,11 +331,12 @@ bool RectifyingHomographyTwoSIFTSolver::estimateModel(
     return estimateNonMinimalModel(data_, sample_, sample_number_, models_, weights_);
 }
 
-double RectifyingHomographyTwoSIFTSolver::residual(
+Eigen::Vector2d RectifyingHomographyTwoSIFTSolver::residual(
     const cv::Mat& feature,
     const SIFTRectifyingHomography& model
 )
 {
+    Eigen::Vector2d residuals;
     // Normalized model: parameters are in the normalized image coordinate system
     const auto alpha = model.alpha;
     const auto& vp1 = model.vp1;
@@ -357,7 +358,7 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     {
         // an estimated rectifying homography which sends a detected feature 
         // to infinity must be wrong
-        return DBL_MAX;
+        residuals(0) = DBL_MAX;
     }
     const auto model_s = std::pow(alpha / point(2), 3.0);
     // scale-based residual: the deviation between the input scale and the model scale
@@ -365,16 +366,16 @@ double RectifyingHomographyTwoSIFTSolver::residual(
     {
         // an estimated rectifying homography should not allow a point with
         // zero scale change
-        return DBL_MAX;
+        residuals(0) = DBL_MAX;
     }
-    const auto r_scale = std::abs(1.0 - (s / model_s));
+    residuals(0) = std::abs(1.0 - (s / model_s));
     // orientation-based residual: the minimal Euclidean distance between the
     // line and the two vanishing points
     const auto d1 = std::abs(line.dot(vp1));
     const auto d2 = std::abs(line.dot(vp2));
-    const auto r_orientation = std::min(d1, d2);
-    // TODO currently it is only possible to return a scalar residual
-    return r_scale;
+    residuals(1) = std::min(d1, d2);
+    
+    return residuals;
 }
 
 bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
