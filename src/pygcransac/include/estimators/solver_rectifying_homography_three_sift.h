@@ -64,6 +64,13 @@ public:
         NormalizingTransform& normalizing_transform
     ) const;
 
+    void getInlierWeights(
+        const size_t* sample,
+        const size_t& sample_number,
+        const double* weights,
+        std::vector<double>& inlier_weights
+    ) const;
+
 protected:
     static constexpr double kScalePower = -1.0 / 3.0;
     static constexpr double kEpsilon = 1e-9;
@@ -92,7 +99,7 @@ bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
     const cv::Mat &data_, // The set of data points
     const size_t *sample_, // The sample used for the estimation
     size_t sample_number_, // The size of the sample
-   std::vector<ScaleBasedRectifyingHomography> &models_ // The estimated model parameters
+    std::vector<ScaleBasedRectifyingHomography> &models_ // The estimated model parameters
 ) const
 {
     if (sample_number_ != sampleSize())
@@ -105,20 +112,20 @@ bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
         );
         return false;
     }
+    // helper function to fetch correct sample
+    auto get_sample_ptr = [sample_, &data_](const size_t& i) {
+        const auto *data_ptr = reinterpret_cast<double*>(data_.data);
+        const size_t idx = (sample_ == nullptr) ? i : sample_[i];
+        return data_ptr + idx * data_.cols;
+    };
 
-    const auto *data_ptr = reinterpret_cast<double*>(data_.data);
     Eigen::Matrix<double, 3, 4> coeffs;
     for (size_t i = 0; i < sample_number_; ++i)
     {
-        // if the sample indices are not given, they are the first items in the
-        // set of data points.
-        const size_t idx = sample_ == nullptr ? i : sample_[i];
-        // compute position of sample in the set of data points
-        const auto *point_ptr = data_ptr + idx * data_.cols;
-        // unpack sample into position coordinates and scale
-        const auto &x = point_ptr[0];
-        const auto &y = point_ptr[1];
-        const auto &s = point_ptr[2];
+        const auto* sample = get_sample_ptr(i);
+        const auto &x = sample[x_pos];
+        const auto &y = sample[y_pos];
+        const auto &s = sample[s_pos];
 
         coeffs(i, 0) = x;
         coeffs(i, 1) = y;
@@ -152,28 +159,32 @@ bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
     const double *weights_
 ) const
 {
+    // helper functions to fetch correct sample and weight 
+    auto get_sample_ptr = [sample_, &data_](const size_t& i) {
+        const auto *data_ptr = reinterpret_cast<double*>(data_.data);
+        const size_t idx = (sample_ == nullptr) ? i : sample_[i];
+        return data_ptr + idx * data_.cols;
+    };
+    auto get_weight = [sample_, weights_](const size_t& i) {
+        const size_t idx = (sample_ == nullptr) ? i : sample_[i];
+        return (weights_ == nullptr) ? 1.0 : weights_[idx];
+    };
+
     Eigen::MatrixXd coeffs(sample_number_, 3);
     Eigen::MatrixXd rhs(sample_number_, 1);
 
-    const auto *data_ptr = reinterpret_cast<double*>(data_.data);
     for (size_t i = 0; i < sample_number_; ++i)
     {
-        // if the sample indices are not given, they are the first items in the
-        // set of data points.
-        const size_t idx = sample_ == nullptr ? i : sample_[i];
-        // compute position of sample in the set of data points
-        const auto *point_ptr = data_ptr + idx * data_.cols;
-        // unpack sample into position coordinates and scale
-        const auto &x = point_ptr[0];
-        const auto &y = point_ptr[1];
-        const auto &s = point_ptr[2];
+        const auto* sample = get_sample_ptr(i);
+        const auto w = get_weight(i);
+        const auto &x = sample[x_pos];
+        const auto &y = sample[y_pos];
+        const auto &s = sample[s_pos];
 
-        const auto weight = weights_ == nullptr ? 1.0 : weights_[idx];
-
-        coeffs(i, 0) = weight * x;
-        coeffs(i, 1) = weight * y;
-        coeffs(i, 2) = -weight * pow(s, kScalePower);
-        rhs(i) = -weight;
+        coeffs(i, 0) = w * x;
+        coeffs(i, 1) = w * y;
+        coeffs(i, 2) = -w * pow(s, kScalePower);
+        rhs(i) = -w;
     }
     // solve linear least squares system
     Eigen::Matrix<double, 3, 1> x = coeffs.colPivHouseholderQr().solve(rhs);
@@ -271,8 +282,8 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     for (size_t i = 0; i < sample_number; i++)
     {
         const auto* feature = get_sample_ptr(i);
-        normalizing_transform.x0 += feature[0]; // x-coordinate
-        normalizing_transform.y0 += feature[1]; // y-coordinate
+        normalizing_transform.x0 += feature[x_pos]; // x-coordinate
+        normalizing_transform.y0 += feature[y_pos]; // y-coordinate
     }
     const auto inv_n = 1.0 / static_cast<double>(sample_number);
     normalizing_transform.x0 *= inv_n;
@@ -306,25 +317,44 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     for (size_t i = 0; i < sample_number; i++)
     {
         const auto* feature = get_sample_ptr(i);
-        auto norm_x = feature[0]; // x-coordinate
-        auto norm_y = feature[1]; // y-coordinate
-        auto norm_scale = feature[2]; // scale
+        auto norm_x = feature[x_pos]; // x-coordinate
+        auto norm_y = feature[y_pos]; // y-coordinate
+        auto norm_scale = feature[s_pos]; // scale
 
         normalizing_transform.normalize(norm_x, norm_y);
         normalizing_transform.normalizeScale(norm_scale);
 
-        *norm_features_ptr++ = norm_x;
-        *norm_features_ptr++ = norm_y;
-        *norm_features_ptr++ = norm_scale;
+        norm_features_ptr[i * normalized_features.cols + x_pos] = norm_x;
+        norm_features_ptr[i * normalized_features.cols + y_pos] = norm_y;
+        norm_features_ptr[i * normalized_features.cols + s_pos] = norm_scale;
         // ensures that if the dimension of the features is larger
-        // than 4, then the normalization will still succeed.
-        for (size_t i = 3; i < normalized_features.cols; ++i)
+        // than 3, then the normalization will still succeed.
+        for (size_t j = 3; j < normalized_features.cols; j++)
         {
-			*norm_features_ptr++ = feature[i];
+			norm_features_ptr[i * normalized_features.cols + j] = feature[j];
         }
     }
 
     return true;
+}
+
+void RectifyingHomographyThreeSIFTSolver::getInlierWeights(
+    const size_t* sample,
+    const size_t& sample_number,
+    const double* weights,
+    std::vector<double>& inlier_weights
+) const
+{
+    auto get_weight = [sample, weights](const size_t& i) {
+        const size_t idx = (sample == nullptr) ? i : sample[i];
+        return (weights == nullptr) ? 1.0 : weights[idx];
+    };
+    inlier_weights.clear();
+    inlier_weights.reserve(sample_number);
+    for (size_t i = 0; i < sample_number; i++)
+    {
+        inlier_weights.push_back(get_weight(i));
+    }
 }
 
 }

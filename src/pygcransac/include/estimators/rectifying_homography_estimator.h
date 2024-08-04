@@ -126,9 +126,17 @@ public:
         {
             return false;
         }
-        // estimate model(s)
+        // only inlier features are used to estimate model so the same must
+        // be done for the weights.
+        std::vector<double> inlier_weights;
+        non_minimal_solver->getInlierWeights(
+            sample_, sample_number_, weights_, inlier_weights
+        );
+        // sample_ = nullptr because normalized features and wieights are now
+        // made up only of inlier features and weights.
         success = non_minimal_solver->estimateModel(
-            normalized_features, nullptr, sample_number_, *models_, weights_ // sample_ = nullptr because normalized features is now made up only of current inliers
+            normalized_features, nullptr, sample_number_, *models_,
+            inlier_weights.data()
         );
         if (!success)
         {

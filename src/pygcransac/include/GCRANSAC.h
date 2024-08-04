@@ -33,6 +33,8 @@
 // Author: Daniel Barath (barath.daniel@sztaki.mta.hu)
 #pragma once
 
+#include <stdexcept>
+#include <sstream>
 #include "GCoptimization.h"
 #include "model.h"
 #include "settings.h"
@@ -141,8 +143,8 @@ namespace gcransac
 		void labeling(const cv::Mat &points_, // The input data points
 			size_t neighbor_number_, // The neighbor number in the graph
 			const std::vector<std::vector<cv::DMatch>> &neighbors_, // The neighborhood
-			_ModelType &model_, // The current model_
-			_ModelEstimator estimator_, // The model estimator
+			const _ModelType &model_, // The current model_
+			const _ModelEstimator& estimator_, // The model estimator
 			double lambda_, // The weight for the spatial coherence term
 			const _ResidualType& threshold_, // The threshold for the inlier-outlier decision
 			std::vector<size_t> &inliers_, // The resulting inlier set
@@ -156,6 +158,24 @@ namespace gcransac
 			Score &so_far_the_best_score_, // The current score
 			const _ModelEstimator &estimator_, // The model estimator
 			const size_t trial_number_); // The max trial number
+
+		bool iteratedLeastSquaresFittingSingleResidual(
+			const cv::Mat& points_,
+			const _ModelEstimator& estimator_,
+			const _ResidualType& threshold_,
+			std::vector<size_t>& inliers_,
+			_ModelType& model_,
+			const bool use_weighting_
+		);
+
+		bool iteratedLeastSquaresFittingMultipleResiduals(
+			const cv::Mat& points_,
+			const _ModelEstimator& estimator_,
+			const _ResidualType& threshold_,
+			std::vector<size_t>& inliers_,
+			_ModelType& model_,
+			const bool use_weighting_
+		);
 
 		// Model fitting by the iterated least squares method
 		bool iteratedLeastSquaresFitting(
@@ -292,6 +312,16 @@ namespace gcransac
 
 		// The size of a minimal sample used for the estimation
 		constexpr size_t sample_number = _ModelEstimator::sampleSize();
+		point_number = points_.rows; // Number of points in the dataset
+		if (point_number < sample_number)
+		{
+			std::stringstream error_msg;
+			error_msg << "ERROR: insufficient samples to proceed!\n"
+				         "There are only " << point_number << " samples and the "
+				  		 "minimal number of samples needed for the model "
+						 "estimation is " << sample_number << ".\n";
+			throw std::runtime_error(error_msg.str());
+		}
 
 		// log(1 - confidence) used for determining the required number of iterations
 		log_probability = log(1.0 - settings.confidence);
@@ -301,7 +331,6 @@ namespace gcransac
 
 		std::unique_ptr<size_t[]> current_sample(new size_t[sample_number]); // Minimal sample for model fitting
 		bool do_local_optimization = false; // Flag to show if local optimization should be applied
-		point_number = points_.rows; // Number of points in the dataset
 
 		size_t inlier_container_offset = 0; // Index to show which inlier vector is currently in use
 		size_t inlier_container_idx; // The index of the currently tested inlier container
@@ -717,7 +746,7 @@ namespace gcransac
 		_PreemptiveModelVerification,
 		_FastInlierSelector,
 		_ResidualType
-	>::iteratedLeastSquaresFitting(
+	>::iteratedLeastSquaresFittingSingleResidual(
 		const cv::Mat& points_,
 		const _ModelEstimator& estimator_,
 		const _ResidualType& threshold_,
@@ -751,21 +780,11 @@ namespace gcransac
 					const size_t &point_idx = inliers_[inlier_idx];
 
 					// The squares residual of the current inlier
-					const auto squared_residual = estimator_.squaredResidual(points_.row(point_idx), model_);
+					const double squared_residual = estimator_.squaredResidual(
+						points_.row(point_idx), model_
+					);
 					// Calculate the Tukey bisquare weights
-					double weight = 0.0;
-					if constexpr (std::is_same_v<_ResidualType, double>)
-					{
-						weight = MAX(0.0, 1.0 - squared_residual / squared_truncated_threshold);
-					}
-					else
-					{
-						weight = MAX(0.0, 1.0 - squared_residual(0) / squared_truncated_threshold(0));
-						for (auto i = 1; i < squared_residual.size(); i++)
-						{
-							weight = MIN(weight, MAX(0.0, 1.0 - squared_residual(i) / squared_truncated_threshold(i)));
-						}
-					}
+					const double weight = MAX(0.0, 1.0 - squared_residual / squared_truncated_threshold);
 					weights[point_idx] = weight * weight;
 				}
 
@@ -866,6 +885,206 @@ namespace gcransac
 	}
 
 	template <
+		class _ModelEstimator,
+		class _NeighborhoodGraph,
+		class _ModelType,
+		class _ScoringFunction,
+		class _PreemptiveModelVerification,
+		class _FastInlierSelector,
+		typename _ResidualType
+	> bool GCRANSAC<
+		_ModelEstimator,
+		_NeighborhoodGraph,
+		_ModelType,
+		_ScoringFunction,
+		_PreemptiveModelVerification,
+		_FastInlierSelector,
+		_ResidualType
+	>::iteratedLeastSquaresFittingMultipleResiduals(
+		const cv::Mat& points_,
+		const _ModelEstimator& estimator_,
+		const _ResidualType& threshold_,
+		std::vector<size_t>& inliers_,
+		_ModelType& model_,
+		const bool use_weighting_
+	)
+	{
+		using namespace Eigen;
+		const size_t sample_size = estimator_.sampleSize(); // The minimal sample size
+		if (inliers_.size() <= sample_size) // Return if there are not enough points
+		{
+			return false;
+		}
+
+		size_t iterations = 0; // Number of least-squares iterations
+		std::vector<size_t> tmp_inliers; // Inliers of the current model
+
+		// Iterated least-squares model fitting
+		const auto n_rows = points_.rows;
+		constexpr auto n_cols = _ResidualType::SizeAtCompileTime;
+		Matrix<double, Dynamic, n_cols, RowMajor> weights(n_rows, n_cols);
+		weights.setZero();
+		Score best_score; // The score of the best estimated model
+		while (++iterations < settings.max_least_squares_iterations)
+		{
+			std::vector<_ModelType> models; // Estimated models
+
+			// Calculate the weights if iteratively re-weighted least-squares is used			
+			if (_ModelEstimator::isWeightingApplicable() && // The weighted is applied only if the model estimator can handles it, and
+				use_weighting_) // the user wants to apply it.
+			{
+				// Calculate Tukey bisquare weights of the inliers
+				for (size_t inlier_idx = 0; inlier_idx < inliers_.size(); ++inlier_idx)
+				{
+					// The real index of the current inlier
+					const auto& point_idx = inliers_[inlier_idx];
+
+					// The squares residual of the current inlier
+					const auto squared_residual = estimator_.squaredResidual(
+						points_.row(point_idx), model_
+					);
+					// Calculate the Tukey bisquare weights
+					for (size_t i = 0; i < n_cols; i++)
+					{
+						auto weight = 1.0 - (squared_residual(i) / squared_truncated_threshold(i));
+						weight = MAX(0.0, weight);
+						weights(point_idx, i) = weight * weight;
+					}
+				}
+
+				const double* weights_flattened = weights.data();
+				// Estimate the model from the current inlier set
+				estimator_.estimateModelNonminimal(
+					points_,
+					inliers_.data(), // The current inliers
+					inliers_.size(), // The number of inliers
+					&models, // The estimated model parameters
+					weights_flattened // The weights used in the weighted least-squares fitting
+				);
+
+				weights.setZero();
+			}
+			else
+			{
+				// Estimate the model from the current inlier set
+				estimator_.estimateModelNonminimal(
+					points_,
+					inliers_.data(), // The current inliers
+					inliers_.size(), // The number of inliers
+					&models  // The estimated model parameters
+				);
+			}
+
+			if (models.size() == 0) // If there is no model estimated, interrupt the procedure
+				break;
+			if (models.size() == 1) // If a single model is estimated we do not have to care about selecting the best
+			{
+				// Calculate the score of the current model
+				tmp_inliers.resize(0);
+				Score score = scoring_function->getScore(points_, // All points
+					models[0], // The current model parameters
+					estimator_, // The estimator 
+					threshold_, // The current threshold
+					tmp_inliers); // The current inlier set
+
+				// Break if the are not enough inliers
+				if (tmp_inliers.size() < sample_size)
+					break;
+
+				// Interrupt the procedure if the inlier number has not changed.
+				// Therefore, the previous and current model parameters are likely the same.
+				if (score.inlier_number <= inliers_.size())
+					break;
+
+				// Update the output model
+				model_ = models[0];
+				// Store the inliers of the new model
+				inliers_.swap(tmp_inliers);
+			}
+			else // If multiple models are estimated select the best (i.e. the one having the highest score) one
+			{
+				bool updated = false; // A flag determining if the model is updated
+
+				// Evaluate all the estimated models to find the best
+				for (auto &model : models)
+				{
+					// Calculate the score of the current model
+					tmp_inliers.resize(0);
+					Score score = scoring_function->getScore(points_, // The input data points
+						model, // The model parameters
+						estimator_, // The estimator
+						threshold_, // The inlier-outlier threshold
+						tmp_inliers); // The inliers of the current model
+
+					// Continue if the are not enough inliers
+					if (tmp_inliers.size() < sample_size)
+						continue;
+
+					// Do not test the model if the inlier number has not changed.
+					// Therefore, the previous and current model parameters are likely the same.
+					if (score.inlier_number <= inliers_.size())
+						continue;
+
+					// Update the model if its score is higher than that of the current best
+					if (score.inlier_number >= best_score.inlier_number)
+					{
+						updated = true; // Set a flag saying that the model is updated, so the process should continue
+						best_score = score; // Store the new score
+						model_ = model; // Store the new model
+						inliers_.swap(tmp_inliers); // Store the inliers of the new model
+					}
+				}
+
+				// If the model has not been updated, interrupt the procedure
+				if (!updated)
+					break;
+			}
+		}
+
+		// If there were more than one iterations, the procedure is considered successfull
+		return iterations > 1;
+	}
+
+	template <
+		class _ModelEstimator,
+		class _NeighborhoodGraph,
+		class _ModelType,
+		class _ScoringFunction,
+		class _PreemptiveModelVerification,
+		class _FastInlierSelector,
+		typename _ResidualType
+	> bool GCRANSAC<
+		_ModelEstimator,
+		_NeighborhoodGraph,
+		_ModelType,
+		_ScoringFunction,
+		_PreemptiveModelVerification,
+		_FastInlierSelector,
+		_ResidualType
+	>::iteratedLeastSquaresFitting(
+		const cv::Mat& points_,
+		const _ModelEstimator& estimator_,
+		const _ResidualType& threshold_,
+		std::vector<size_t>& inliers_,
+		_ModelType& model_,
+		const bool use_weighting_
+	)
+	{
+		if constexpr (std::is_same_v<_ResidualType, double>)
+		{
+			return iteratedLeastSquaresFittingSingleResidual(
+				points_, estimator_, threshold_, inliers_, model_, use_weighting_
+			);
+		}
+		else
+		{
+			return iteratedLeastSquaresFittingMultipleResiduals(
+				points_, estimator_, threshold_, inliers_, model_, use_weighting_
+			);
+		}
+	}
+
+	template <
 		class _ModelType,
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
@@ -959,16 +1178,57 @@ namespace gcransac
 			// Apply the graph-cut-based inlier/outlier labeling.
 			// The inlier set will contain the points closer than the threshold and
 			// their neighbors depending on the weight of the spatial coherence term.
-			labeling(
-				points_, // The input points
-				statistics.neighbor_number, // The number of neighbors, i.e. the edge number of the graph 
-				neighbours, // The neighborhood graph
-				best_model, // The best model parameters
-				estimator_, // The model estimator
-				settings.spatial_coherence_weight, // The weight of the spatial coherence term
-				settings.threshold, // The inlier-outlier threshold
-				inliers, // The selected inliers
-				energy); // The energy after the procedure
+			const double* weights = nullptr;
+			if constexpr (!std::is_same_v<_ResidualType, double>)
+			{
+				// TODO this is for non-scalar residuals and thresholds.
+				// Right now this works only when lambda_ = 0.
+				using namespace Eigen;
+				constexpr size_t n_residuals = _ResidualType::SizeAtCompileTime;
+				inliers.reserve(points_.rows);
+				Matrix<double, Dynamic, n_residuals, RowMajor> weights_matrix(points_.rows, n_residuals);
+				weights_matrix.setZero();
+				_ResidualType squared_truncated_thresholds;
+				for (size_t i = 0; i < n_residuals; i++)
+				{
+					squared_truncated_thresholds(i) = settings.threshold(i) * settings.threshold(i) * 9 / 4;
+				}
+				for (auto point_idx = 0; point_idx < points_.rows; point_idx++)
+				{
+					const auto sqr_residuals = estimator_.squaredResidual(points_.row(point_idx), best_model);
+					// static_assert(std::is_same<decltype(sqr_residuals), _ResidualType>::value, "Residuals type is not the same as thresholds type.");
+					Eigen::Array<bool, Eigen::Dynamic, 1> comparison = sqr_residuals.array() <= squared_truncated_thresholds.array();
+					if (comparison.any())
+					{
+						inliers.emplace_back(point_idx);
+					}
+					// construct weights matrix such that inliers only contribute
+					// constraints for the residuals below the corresponding
+					// thresholds.
+					for (size_t i = 0; i < n_residuals; i++)
+					{
+						if (comparison(i))
+						{
+							weights_matrix(point_idx, i) = 1.0;
+						}
+					}
+				}
+				inliers.shrink_to_fit();
+				const double* weights = weights_matrix.data();
+			}
+			else
+			{
+				labeling(
+					points_, // The input points
+					statistics.neighbor_number, // The number of neighbors, i.e. the edge number of the graph 
+					neighbours, // The neighborhood graph
+					best_model, // The best model parameters
+					estimator_, // The model estimator
+					settings.spatial_coherence_weight, // The weight of the spatial coherence term
+					settings.threshold, // The inlier-outlier threshold
+					inliers, // The selected inliers
+					energy); // The energy after the procedure
+			}
 
 			// Number of points (i.e. the sample size) used in the inner RANSAC
 			const size_t sample_size = 
@@ -990,7 +1250,8 @@ namespace gcransac
 					if (!estimator_.estimateModelNonminimal(points_,  // The input data points
 						current_sample.get(),  // The selected sample
 						sample_size, // The size of the sample
-						&models)) // The estimated model parameter
+						&models, // The estimated model parameter
+						weights))
 						continue;
 				}
 				else if (_ModelEstimator::sampleSize() < inliers.size()) // If there are enough inliers to estimate the model, use all of them
@@ -1000,7 +1261,8 @@ namespace gcransac
 					if (!estimator_.estimateModelNonminimal(points_, // The input data points
 						&inliers[0],  // The selected sample
 						inliers.size(), // The size of the sample
-						&models)) // The estimated model parameter
+						&models, // The estimated model parameter
+						weights))
 						break;
 				}
 				else // Otherwise, break the for cycle.
@@ -1069,8 +1331,8 @@ namespace gcransac
 		const cv::Mat &points_,
 		size_t neighbor_number_,
 		const std::vector<std::vector<cv::DMatch>> &neighbors_,
-		_ModelType &model_,
-		_ModelEstimator estimator_,
+		const _ModelType &model_,
+		const _ModelEstimator& estimator_,
 		double lambda_,	// spatial coherence
 		const _ResidualType& threshold_,
 		std::vector<size_t> &inliers_,
@@ -1078,122 +1340,104 @@ namespace gcransac
 	)
 	{
 		inliers_.reserve(points_.rows);
-		// TODO this is for non-scalar residuals and thresholds.
-		// Right now this works only when lambda_ = 0.
-		if constexpr (!std::is_same_v<_ResidualType, double>)
+		const int &point_number = points_.rows;
+
+		// Initializing the problem graph for the graph-cut algorithm.
+		Energy<double, double, double> *problem_graph =
+			new Energy<double, double, double>(point_number, // The number of vertices
+				neighbor_number_, // The number of edges
+				NULL);
+
+		// Add a vertex for each point
+		for (auto i = 0; i < point_number; ++i)
+			problem_graph->add_node();
+
+		// The distance and energy for each point
+		std::vector<double> distance_per_threshold;
+		distance_per_threshold.reserve(point_number);
+		_ResidualType tmp_squared_distance;
+		double tmp_energy;
+		// TODO Gaussian kernel should be multivariate now. What is the 9/4 factor for?
+		const double squared_truncated_threshold = threshold_ * threshold_ * 9 / 4;
+		const double one_minus_lambda = 1.0 - lambda_;
+
+		// Estimate the vertex capacities
+		for (size_t i = 0; i < point_number; ++i)
 		{
-			for (auto point_idx = 0; point_idx < points_.rows; point_idx++)
+			// Calculating the point-to-model squared residual
+			tmp_squared_distance = estimator_.squaredResidual(
+				points_.row(i), model_
+			);
+			// Storing the residual divided by the squared threshold
+			// TODO why clamp to [0, 1]?
+			distance_per_threshold.emplace_back(
+				std::clamp(tmp_squared_distance / squared_truncated_threshold, 0.0, 1.0));
+			// Calculating the implied unary energy
+			tmp_energy = 1 - distance_per_threshold.back();
+
+			// Adding the unary energy to the graph
+			if (tmp_squared_distance <= squared_truncated_threshold)
+				problem_graph->add_term1(i, one_minus_lambda * tmp_energy, 0);
+			else 
+				problem_graph->add_term1(i, 0, one_minus_lambda * (1 - tmp_energy));
+		}
+
+		std::vector<std::vector<int>> used_edges(point_number, std::vector<int>(point_number, 0));
+
+		if (lambda_ > 0)
+		{
+			double energy1, energy2, energy_sum;
+			double e00, e11 = 0; // Unused: e01 = 1.0, e10 = 1.0,
+
+			// Iterate through all points and set their edges
+			for (auto point_idx = 0; point_idx < point_number; ++point_idx)
 			{
-				auto residuals = estimator_.residual(points_.row(point_idx), model_);
-				static_assert(std::is_same<decltype(residuals), _ResidualType>::value, "Residuals type is not the same as thresholds type.");
-				Eigen::Array<bool, Eigen::Dynamic, 1> comparison = residuals.array() <= threshold_.array();
-				if (comparison.any())
+				energy1 = distance_per_threshold[point_idx]; // Truncated quadratic cost
+
+				// Iterate through  all neighbors
+				for (const size_t &actual_neighbor_idx : neighborhood_graph->getNeighbors(point_idx))
 				{
-					inliers_.emplace_back(point_idx);
+					if (actual_neighbor_idx == point_idx)
+						continue;
+
+					if (actual_neighbor_idx == point_idx || actual_neighbor_idx < 0)
+						continue;
+
+					if (used_edges[actual_neighbor_idx][point_idx] == 1 ||
+						used_edges[point_idx][actual_neighbor_idx] == 1)
+						continue;
+
+					used_edges[actual_neighbor_idx][point_idx] = 1;
+					used_edges[point_idx][actual_neighbor_idx] = 1;
+
+					energy2 = distance_per_threshold[actual_neighbor_idx]; // Truncated quadratic cost
+					energy_sum = energy1 + energy2;
+
+					e00 = 0.5 * energy_sum;
+
+					constexpr double e01_plus_e10 = 2.0; // e01 + e10 = 2
+					if (e00 + e11 > e01_plus_e10)
+						printf("Non-submodular expansion term detected; smooth costs must be a metric for expansion\n");
+
+					problem_graph->add_term2(point_idx, // The current point's index
+						actual_neighbor_idx, // The current neighbor's index
+						e00 * lambda_,
+						lambda_, // = e01 * lambda
+						lambda_, // = e10 * lambda
+						e11 * lambda_);
 				}
 			}
 		}
-		else
-		{
-			const int &point_number = points_.rows;
 
-			// Initializing the problem graph for the graph-cut algorithm.
-			Energy<double, double, double> *problem_graph =
-				new Energy<double, double, double>(point_number, // The number of vertices
-					neighbor_number_, // The number of edges
-					NULL);
+		// Run the standard st-graph-cut algorithm
+		problem_graph->minimize();
 
-			// Add a vertex for each point
-			for (auto i = 0; i < point_number; ++i)
-				problem_graph->add_node();
+		// Select the inliers, i.e., the points labeled as SINK.
+		for (auto point_idx = 0; point_idx < points_.rows; ++point_idx)
+			if (problem_graph->what_segment(point_idx) == Graph<double, double, double>::SINK)
+				inliers_.emplace_back(point_idx);
 
-			// The distance and energy for each point
-			std::vector<double> distance_per_threshold;
-			distance_per_threshold.reserve(point_number);
-			_ResidualType tmp_squared_distance;
-			double tmp_energy;
-			// TODO Gaussian kernel should be multivariate now. What is the 9/4 factor for?
-			const double squared_truncated_threshold = threshold_ * threshold_ * 9 / 4;
-			const double one_minus_lambda = 1.0 - lambda_;
-
-			// Estimate the vertex capacities
-			for (size_t i = 0; i < point_number; ++i)
-			{
-				// Calculating the point-to-model squared residual
-				tmp_squared_distance = estimator_.squaredResidual(
-					points_.row(i), model_
-				);
-				// Storing the residual divided by the squared threshold
-				// TODO why clamp to [0, 1]?
-				distance_per_threshold.emplace_back(
-					std::clamp(tmp_squared_distance / squared_truncated_threshold, 0.0, 1.0));
-				// Calculating the implied unary energy
-				tmp_energy = 1 - distance_per_threshold.back();
-
-				// Adding the unary energy to the graph
-				if (tmp_squared_distance <= squared_truncated_threshold)
-					problem_graph->add_term1(i, one_minus_lambda * tmp_energy, 0);
-				else 
-					problem_graph->add_term1(i, 0, one_minus_lambda * (1 - tmp_energy));
-			}
-
-			std::vector<std::vector<int>> used_edges(point_number, std::vector<int>(point_number, 0));
-
-			if (lambda_ > 0)
-			{
-				double energy1, energy2, energy_sum;
-				double e00, e11 = 0; // Unused: e01 = 1.0, e10 = 1.0,
-
-				// Iterate through all points and set their edges
-				for (auto point_idx = 0; point_idx < point_number; ++point_idx)
-				{
-					energy1 = distance_per_threshold[point_idx]; // Truncated quadratic cost
-
-					// Iterate through  all neighbors
-					for (const size_t &actual_neighbor_idx : neighborhood_graph->getNeighbors(point_idx))
-					{
-						if (actual_neighbor_idx == point_idx)
-							continue;
-
-						if (actual_neighbor_idx == point_idx || actual_neighbor_idx < 0)
-							continue;
-
-						if (used_edges[actual_neighbor_idx][point_idx] == 1 ||
-							used_edges[point_idx][actual_neighbor_idx] == 1)
-							continue;
-
-						used_edges[actual_neighbor_idx][point_idx] = 1;
-						used_edges[point_idx][actual_neighbor_idx] = 1;
-
-						energy2 = distance_per_threshold[actual_neighbor_idx]; // Truncated quadratic cost
-						energy_sum = energy1 + energy2;
-
-						e00 = 0.5 * energy_sum;
-
-						constexpr double e01_plus_e10 = 2.0; // e01 + e10 = 2
-						if (e00 + e11 > e01_plus_e10)
-							printf("Non-submodular expansion term detected; smooth costs must be a metric for expansion\n");
-
-						problem_graph->add_term2(point_idx, // The current point's index
-							actual_neighbor_idx, // The current neighbor's index
-							e00 * lambda_,
-							lambda_, // = e01 * lambda
-							lambda_, // = e10 * lambda
-							e11 * lambda_);
-					}
-				}
-			}
-
-			// Run the standard st-graph-cut algorithm
-			problem_graph->minimize();
-
-			// Select the inliers, i.e., the points labeled as SINK.
-			for (auto point_idx = 0; point_idx < points_.rows; ++point_idx)
-				if (problem_graph->what_segment(point_idx) == Graph<double, double, double>::SINK)
-					inliers_.emplace_back(point_idx);
-
-			// Clean the memory
-			delete problem_graph;
-		}
+		// Clean the memory
+		delete problem_graph;
 	}
 }
