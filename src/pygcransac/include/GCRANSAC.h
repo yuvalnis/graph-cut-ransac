@@ -47,24 +47,35 @@
 
 namespace gcransac
 {
-
 	template <
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
-		class _ModelType = Model,
+		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction = MSACScoringFunction<_ModelEstimator>,
 		class _PreemptiveModelVerification = preemption::EmptyPreemptiveVerfication<_ModelEstimator, _ModelType>,
-		class _FastInlierSelector = inlier_selector::EmptyInlierSelector<_ModelEstimator, _NeighborhoodGraph>,
-		typename _ResidualType = double
+		class _FastInlierSelector = inlier_selector::EmptyInlierSelector<_ModelEstimator, _NeighborhoodGraph>
 	> class GCRANSAC
 	{
+	static_assert(_ResidualDimension > 0, "_ResidualDimension must be greater than 0");
+
 	public:
-		utils::Settings<_ResidualType> settings;
+		using InlierContainerType = typename std::conditional<
+			(_ResidualDimension == 1),
+			std::vector<size_t>,
+			std::array<_ResidualDimension, std::vector<size_t>>
+		>::type;
+
+		utils::Settings settings;
+		static constexpr size_t m_residual_dim = _ResidualDimension;
 
 		GCRANSAC() :
 			time_limit(std::numeric_limits<double>::max()),
-			scoring_function(std::make_unique<_ScoringFunction>())
+			scoring_function(std::make_unique<_ScoringFunction>()),
+			settings(m_residual_dim)
 		{
+			truncated_threshold = Eigen::ArrayXd::Constant(m_residual_dim, 0.0);
+			squared_truncated_threshold = Eigen::ArrayXd::Constant(m_residual_dim, 0.0);
 		}
 		~GCRANSAC() 
 		{ 
@@ -114,10 +125,10 @@ namespace gcransac
 	protected:
 		double time_limit; // The desired time limit
 		std::vector<std::vector<cv::DMatch>> neighbours; // The neighborhood structure
-		utils::RANSACStatistics statistics; // RANSAC statistics
+		utils::RANSACStatistics<m_residual_dim> statistics; // RANSAC statistics
 		int point_number; // The point number
-		_ResidualType truncated_threshold; // 3 / 2 * threshold_
-		_ResidualType squared_truncated_threshold; // 9 / 4 * threshold_^2
+		Eigen::ArrayXd truncated_threshold; // 3 / 2 * threshold_
+		Eigen::ArrayXd squared_truncated_threshold; // 9 / 4 * threshold_^2
 		int step_size; // Step size per processes
 		double log_probability; // The logarithm of 1 - confidence
 		const _NeighborhoodGraph *neighborhood_graph;
@@ -146,14 +157,14 @@ namespace gcransac
 			const _ModelType &model_, // The current model_
 			const _ModelEstimator& estimator_, // The model estimator
 			double lambda_, // The weight for the spatial coherence term
-			const _ResidualType& threshold_, // The threshold for the inlier-outlier decision
+			const double& threshold_, // The threshold for the inlier-outlier decision
 			std::vector<size_t> &inliers_, // The resulting inlier set
 			double &energy_ // The resulting energy
 		);
 
 		// Apply the graph-cut optimization for GC-RANSAC
 		bool graphCutLocalOptimization(const cv::Mat &points_, // The input data points
-			std::vector<size_t> &so_far_the_best_inliers_, // The input, than the resulting inlier set
+			InlierContainerType& so_far_the_best_inliers_, // The input, than the resulting inlier set
 			_ModelType &so_far_the_best_model_, // The current model
 			Score &so_far_the_best_score_, // The current score
 			const _ModelEstimator &estimator_, // The model estimator
@@ -162,7 +173,7 @@ namespace gcransac
 		bool iteratedLeastSquaresFittingSingleResidual(
 			const cv::Mat& points_,
 			const _ModelEstimator& estimator_,
-			const _ResidualType& threshold_,
+			const Eigen::ArrayXd& threshold_,
 			std::vector<size_t>& inliers_,
 			_ModelType& model_,
 			const bool use_weighting_
@@ -171,8 +182,8 @@ namespace gcransac
 		bool iteratedLeastSquaresFittingMultipleResiduals(
 			const cv::Mat& points_,
 			const _ModelEstimator& estimator_,
-			const _ResidualType& threshold_,
-			std::vector<size_t>& inliers_,
+			const Eigen::ArrayXd& threshold_,
+			std::vector<std::vector<size_t>>& inliers_,
 			_ModelType& model_,
 			const bool use_weighting_
 		);
@@ -181,29 +192,29 @@ namespace gcransac
 		bool iteratedLeastSquaresFitting(
 			const cv::Mat& points_, // The input data points
 			const _ModelEstimator& estimator_, // The model estimator
-			const _ResidualType& threshold_, // The inlier-outlier threshold
-			std::vector<size_t>& inliers_, // The resulting inlier set
+			const Eigen::ArrayXd& threshold_, // The inlier-outlier threshold
+			InlierContainerType& inliers_, // The resulting inlier set
 			_ModelType& model_, // The estimated model
 			const bool use_weighting_ = true); // Use iteratively re-weighted least-squares
 	};
 
 	// Computes the desired iteration number for RANSAC w.r.t. to the current inlier number
 	template <
-		class _ModelType,
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
+		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction,
 		class _PreemptiveModelVerification,
-		class _FastInlierSelector,
-		typename _ResidualType
+		class _FastInlierSelector
 	> size_t GCRANSAC<
-		_ModelType,
 		_ModelEstimator,
 		_NeighborhoodGraph,
+		_ModelType,
+		_ResidualDimension,
 		_ScoringFunction,
 		_PreemptiveModelVerification,
-		_FastInlierSelector,
-		_ResidualType
+		_FastInlierSelector
 	>::getIterationNumber(
 		size_t inlier_number_,
 		size_t point_number_,
@@ -226,18 +237,18 @@ namespace gcransac
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
 		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction,
 		class _PreemptiveModelVerification,
-		class _FastInlierSelector,
-		typename _ResidualType
+		class _FastInlierSelector
 	> void GCRANSAC<
 		_ModelEstimator,
 		_NeighborhoodGraph,
 		_ModelType,
+		_ResidualDimension,
 		_ScoringFunction,
 		_PreemptiveModelVerification,
-		_FastInlierSelector,
-		_ResidualType
+		_FastInlierSelector
 	>::run(
 		const cv::Mat &points_,  // Data points
 		const _ModelEstimator &estimator_, // The model estimator
@@ -269,18 +280,18 @@ namespace gcransac
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
 		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction,
 		class _PreemptiveModelVerification,
-		class _FastInlierSelector,
-		typename _ResidualType
+		class _FastInlierSelector
 	> void GCRANSAC<
 		_ModelEstimator,
 		_NeighborhoodGraph,
 		_ModelType,
+		_ResidualDimension,
 		_ScoringFunction,
 		_PreemptiveModelVerification,
-		_FastInlierSelector,
-		_ResidualType
+		_FastInlierSelector
 	>::run(
 		const cv::Mat &points_,  // Data points
 		const _ModelEstimator &estimator_, // The model estimator
@@ -342,21 +353,19 @@ namespace gcransac
 		temp_inner_inliers[1].reserve(point_number);
 
 		neighborhood_graph = neighborhood_graph_; // The neighborhood graph used for the graph-cut local optimization
-		if constexpr (std::is_same_v<_ResidualType, double>)
+		// initialize thresholds and squared-thresholds using Eigen::Array elementwise operations.
+		if (truncated_threshold.size() != settings.threshold.size() ||
+			squared_truncated_threshold.size() != settings.threshold.size())
 		{
-			truncated_threshold = 3.0 / 2.0 * settings.threshold; // The truncated least-squares threshold
-			squared_truncated_threshold = truncated_threshold * truncated_threshold; // The squared least-squares threshold
+			std::stringstream error_msg;
+			error_msg << "ERROR: threshold dimensions in GCRANSAC and its "
+						 "settings are incompatible!\n";
+			throw std::runtime_error(error_msg.str());
 		}
-		else
-		{
-			for (auto i = 0; i < settings.threshold.size(); i++)
-			{
-				const auto trunc_thresh = 3.0 / 2.0 * settings.threshold(i);
-				truncated_threshold(i) = trunc_thresh;
-				squared_truncated_threshold(i) = trunc_thresh * trunc_thresh;
-			}
-		}
-		scoring_function->initialize(squared_truncated_threshold, point_number); // Initializing the scoring function
+		truncated_threshold = 1.5 * settings.threshold;
+		squared_truncated_threshold = truncated_threshold * truncated_threshold;
+		// Initializing the scoring function
+		scoring_function->initialize(squared_truncated_threshold, point_number);
 
 		// Initialize the pool for sampling
 		std::vector<size_t> pool(point_number);
@@ -734,22 +743,22 @@ namespace gcransac
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
 		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction,
 		class _PreemptiveModelVerification,
-		class _FastInlierSelector,
-		typename _ResidualType
+		class _FastInlierSelector
 	> bool GCRANSAC<
 		_ModelEstimator,
 		_NeighborhoodGraph,
 		_ModelType,
+		_ResidualDimension,
 		_ScoringFunction,
 		_PreemptiveModelVerification,
-		_FastInlierSelector,
-		_ResidualType
+		_FastInlierSelector
 	>::iteratedLeastSquaresFittingSingleResidual(
 		const cv::Mat& points_,
 		const _ModelEstimator& estimator_,
-		const _ResidualType& threshold_,
+		const Eigen::ArrayXd& threshold_,
 		std::vector<size_t>& inliers_,
 		_ModelType& model_,
 		const bool use_weighting_
@@ -760,7 +769,7 @@ namespace gcransac
 			return false;
 
 		size_t iterations = 0; // Number of least-squares iterations
-		std::vector<size_t> tmp_inliers; // Inliers of the current model
+		std::vector<std::vector<size_t>> tmp_inliers; // Inliers of the current model
 
 		// Iterated least-squares model fitting
 		std::unique_ptr<double []> weights = std::make_unique<double []>(points_.rows);
@@ -888,23 +897,23 @@ namespace gcransac
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
 		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction,
 		class _PreemptiveModelVerification,
-		class _FastInlierSelector,
-		typename _ResidualType
+		class _FastInlierSelector
 	> bool GCRANSAC<
 		_ModelEstimator,
 		_NeighborhoodGraph,
 		_ModelType,
+		_ResidualDimension,
 		_ScoringFunction,
 		_PreemptiveModelVerification,
-		_FastInlierSelector,
-		_ResidualType
+		_FastInlierSelector
 	>::iteratedLeastSquaresFittingMultipleResiduals(
 		const cv::Mat& points_,
 		const _ModelEstimator& estimator_,
-		const _ResidualType& threshold_,
-		std::vector<size_t>& inliers_,
+		const Eigen::ArrayXd& threshold_,
+		std::vector<std::vector<size_t>>& inliers_,
 		_ModelType& model_,
 		const bool use_weighting_
 	)
@@ -917,11 +926,11 @@ namespace gcransac
 		}
 
 		size_t iterations = 0; // Number of least-squares iterations
-		std::vector<size_t> tmp_inliers; // Inliers of the current model
+		std::vector<std::vector<size_t>> tmp_inliers; // Inliers of the current model
 
 		// Iterated least-squares model fitting
 		const auto n_rows = points_.rows;
-		constexpr auto n_cols = _ResidualType::SizeAtCompileTime;
+		const auto n_cols = threshold_.size();
 		Matrix<double, Dynamic, n_cols, RowMajor> weights(n_rows, n_cols);
 		weights.setZero();
 		Score best_score; // The score of the best estimated model
@@ -1049,28 +1058,28 @@ namespace gcransac
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
 		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction,
 		class _PreemptiveModelVerification,
-		class _FastInlierSelector,
-		typename _ResidualType
+		class _FastInlierSelector
 	> bool GCRANSAC<
 		_ModelEstimator,
 		_NeighborhoodGraph,
 		_ModelType,
+		_ResidualDimension,
 		_ScoringFunction,
 		_PreemptiveModelVerification,
-		_FastInlierSelector,
-		_ResidualType
+		_FastInlierSelector
 	>::iteratedLeastSquaresFitting(
 		const cv::Mat& points_,
 		const _ModelEstimator& estimator_,
-		const _ResidualType& threshold_,
-		std::vector<size_t>& inliers_,
+		const Eigen::ArrayXd& threshold_,
+		InlierContainerType& inliers_,
 		_ModelType& model_,
 		const bool use_weighting_
 	)
 	{
-		if constexpr (std::is_same_v<_ResidualType, double>)
+		if constexpr (m_residual_dim == 1)
 		{
 			return iteratedLeastSquaresFittingSingleResidual(
 				points_, estimator_, threshold_, inliers_, model_, use_weighting_
@@ -1085,23 +1094,23 @@ namespace gcransac
 	}
 
 	template <
-		class _ModelType,
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
+		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction,
 		class _PreemptiveModelVerification,
-		class _FastInlierSelector,
-		typename _ResidualType
+		class _FastInlierSelector
 	>
 	template <size_t _CalledFromLocalOptimization>
 	bool GCRANSAC<
-		_ModelType,
 		_ModelEstimator,
 		_NeighborhoodGraph,
+		_ModelType,
+		_ResidualDimension,
 		_ScoringFunction,
 		_PreemptiveModelVerification,
-		_FastInlierSelector,
-		_ResidualType
+		_FastInlierSelector
 	>::sample(
 		const std::vector<size_t> &pool_, // The pool if indices determining which point can be selected
 		size_t sample_number_,
@@ -1123,21 +1132,21 @@ namespace gcransac
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
 		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction,
 		class _PreemptiveModelVerification,
-		class _FastInlierSelector,
-		typename _ResidualType
+		class _FastInlierSelector
 	> bool GCRANSAC<
 		_ModelEstimator,
 		_NeighborhoodGraph,
 		_ModelType,
+		_ResidualDimension,
 		_ScoringFunction,
 		_PreemptiveModelVerification,
-		_FastInlierSelector,
-		_ResidualType
+		_FastInlierSelector
 	>::graphCutLocalOptimization(
 		const cv::Mat &points_,
-		std::vector<size_t> &so_far_the_best_inliers_,
+		InlierContainerType& so_far_the_best_inliers_,
 		_ModelType &so_far_the_best_model_,
 		Score &so_far_the_best_score_,
 		const _ModelEstimator &estimator_,
@@ -1148,16 +1157,28 @@ namespace gcransac
 		Score max_score = so_far_the_best_score_; // The current best score
 		_ModelType best_model = so_far_the_best_model_; // The current best model
 		std::vector<_ModelType> models; // The estimated models' parameters
-		std::vector<size_t> best_inliers, // Inliers of the best model
-			inliers,
-			tmp_inliers; // The inliers of the current model
+		InlierContainerType best_inliers; // Inliers of the best model
+		InlierContainerType	inliers;
+		InlierContainerType	tmp_inliers; // The inliers of the current model
 		bool updated; // A flag to see if the model is updated
 		double energy; // The energy after applying the graph-cut algorithm
 
 		// Occupy the memory for the inlier arrays
-		inliers.reserve(points_.rows);
-		best_inliers.reserve(points_.rows);
-		tmp_inliers.reserve(points_.rows);		
+		if constexpr (m_residual_dim == 1)
+		{
+			inliers.reserve(points_.rows);
+			best_inliers.reserve(points_.rows);
+			tmp_inliers.reserve(points_.rows);		
+		}
+		else
+		{
+			for (size_t i = 0; i < m_residual_dim; i++)
+			{
+				inliers[i].reserve(points_.rows);
+				best_inliers[i].reserve(points_.rows);
+				tmp_inliers[i].reserve(points_.rows);
+			}
+		}
 		models.reserve(_ModelEstimator::maximumMinimalSolutions());
 
 		// Increase the number of the local optimizations applied
@@ -1173,48 +1194,53 @@ namespace gcransac
 			updated = false;
 
 			// Clear the inliers
-			inliers.clear();
+			for (size_t i = 0; i < m_residual_dim; i++)
+			{
+				inliers[i].clear();
+			}
 
 			// Apply the graph-cut-based inlier/outlier labeling.
 			// The inlier set will contain the points closer than the threshold and
 			// their neighbors depending on the weight of the spatial coherence term.
 			const double* weights = nullptr;
-			if constexpr (!std::is_same_v<_ResidualType, double>)
+			size_t sample_size{0};
+			if constexpr (m_residual_dim > 1)
 			{
 				// TODO this is for non-scalar residuals and thresholds.
 				// Right now this works only when lambda_ = 0.
 				using namespace Eigen;
-				constexpr size_t n_residuals = _ResidualType::SizeAtCompileTime;
-				inliers.reserve(points_.rows);
-				Matrix<double, Dynamic, n_residuals, RowMajor> weights_matrix(points_.rows, n_residuals);
+				Matrix<double, Dynamic, m_residual_dim, RowMajor> weights_matrix(
+					points_.rows, m_residual_dim
+				);
 				weights_matrix.setZero();
-				_ResidualType squared_truncated_thresholds;
-				for (size_t i = 0; i < n_residuals; i++)
-				{
-					squared_truncated_thresholds(i) = settings.threshold(i) * settings.threshold(i) * 9 / 4;
-				}
+				const auto squared_truncated_thresholds = 2.25 * settings.threshold * settings.threshold;
 				for (auto point_idx = 0; point_idx < points_.rows; point_idx++)
 				{
 					const auto sqr_residuals = estimator_.squaredResidual(points_.row(point_idx), best_model);
-					// static_assert(std::is_same<decltype(sqr_residuals), _ResidualType>::value, "Residuals type is not the same as thresholds type.");
-					Eigen::Array<bool, Eigen::Dynamic, 1> comparison = sqr_residuals.array() <= squared_truncated_thresholds.array();
-					if (comparison.any())
-					{
-						inliers.emplace_back(point_idx);
-					}
+					Eigen::Array<bool, m_residual_dim, 1> comparison = sqr_residuals <= squared_truncated_thresholds;
 					// construct weights matrix such that inliers only contribute
 					// constraints for the residuals below the corresponding
 					// thresholds.
-					for (size_t i = 0; i < n_residuals; i++)
+					for (size_t i = 0; i < m_residual_dim; i++)
 					{
 						if (comparison(i))
 						{
+							inliers[i].emplace_back(point_idx);
 							weights_matrix(point_idx, i) = 1.0;
 						}
 					}
+					// TODO until the inlier types are handled separately, we
+					// use zero- and one-weights to disable and enable a feature.
+					if (comparison.any())
+					{
+						sample_size++;
+					}
 				}
-				inliers.shrink_to_fit();
-				const double* weights = weights_matrix.data();
+				for (size_t i = 0; i < m_residual_dim; i++)
+				{
+					inliers[i].shrink_to_fit();
+				}
+				weights = weights_matrix.data();
 			}
 			else
 			{
@@ -1225,14 +1251,22 @@ namespace gcransac
 					best_model, // The best model parameters
 					estimator_, // The model estimator
 					settings.spatial_coherence_weight, // The weight of the spatial coherence term
-					settings.threshold, // The inlier-outlier threshold
+					settings.threshold(0), // The inlier-outlier threshold
 					inliers, // The selected inliers
-					energy); // The energy after the procedure
+					energy // The energy after the procedure
+				);
+				sample_size = inliers.size();
 			}
 
 			// Number of points (i.e. the sample size) used in the inner RANSAC
-			const size_t sample_size = 
-				static_cast<size_t>(MIN(inlier_limit, inliers.size()));
+
+			// TODO deal with multple sample types:
+			// 1. Each inlier type has its own sample size.
+			// 2. A sample needs to be drawn from each inlier type.
+			// 3. Estimating the model needs to be done with a combination of
+			// 	  all sample types.
+
+			sample_size = MIN(inlier_limit, sample_size);
 
 			// Run an inner RANSAC on the inliers coming from the graph-cut algorithm
 			for (auto trial = 0; trial < trial_number_; ++trial)
@@ -1259,14 +1293,17 @@ namespace gcransac
 					// Apply least-squares model fitting to the selected points.
 					// If it fails, break the for cycle since we have used all inliers for this step.
 					if (!estimator_.estimateModelNonminimal(points_, // The input data points
-						&inliers[0],  // The selected sample
+						inliers.data(),  // The selected sample
 						inliers.size(), // The size of the sample
 						&models, // The estimated model parameter
 						weights))
 						break;
 				}
-				else // Otherwise, break the for cycle.
+				else 
+				{
+					// Otherwise, break the for cycle.
 					break;
+				}
 
 				// Select the best model from the estimated set
 				for (auto &model : models)
@@ -1315,18 +1352,18 @@ namespace gcransac
 		class _ModelEstimator,
 		class _NeighborhoodGraph,
 		class _ModelType,
+		size_t _ResidualDimension,
 		class _ScoringFunction,
 		class _PreemptiveModelVerification,
-		class _FastInlierSelector,
-		typename _ResidualType
+		class _FastInlierSelector
 	> void GCRANSAC<
 		_ModelEstimator,
 		_NeighborhoodGraph,
 		_ModelType,
+		_ResidualDimension,
 		_ScoringFunction,
 		_PreemptiveModelVerification,
-		_FastInlierSelector,
-		_ResidualType
+		_FastInlierSelector
 	>::labeling(
 		const cv::Mat &points_,
 		size_t neighbor_number_,
@@ -1334,11 +1371,12 @@ namespace gcransac
 		const _ModelType &model_,
 		const _ModelEstimator& estimator_,
 		double lambda_,	// spatial coherence
-		const _ResidualType& threshold_,
-		std::vector<size_t> &inliers_,
+		const double& threshold_,
+		std::vector<size_t>& inliers_,
 		double &energy_
 	)
 	{
+		static_assert(m_residual_dim == 1, "Labeling function should not be called when multiple residual types exist!");
 		inliers_.reserve(points_.rows);
 		const int &point_number = points_.rows;
 
@@ -1355,10 +1393,10 @@ namespace gcransac
 		// The distance and energy for each point
 		std::vector<double> distance_per_threshold;
 		distance_per_threshold.reserve(point_number);
-		_ResidualType tmp_squared_distance;
+		double tmp_squared_distance;
 		double tmp_energy;
 		// TODO Gaussian kernel should be multivariate now. What is the 9/4 factor for?
-		const double squared_truncated_threshold = threshold_ * threshold_ * 9 / 4;
+		const double squared_truncated_threshold = (9.0 / 4.0) * threshold_(0) * threshold_(0);
 		const double one_minus_lambda = 1.0 - lambda_;
 
 		// Estimate the vertex capacities

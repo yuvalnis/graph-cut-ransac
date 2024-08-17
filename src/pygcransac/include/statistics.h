@@ -36,38 +36,35 @@
 #include <vector>
 #include <numeric>
 
-namespace gcransac
+namespace gcransac::utils
 {
-	namespace utils
-	{
-		struct RANSACStatistics
-		{
-			size_t graph_cut_number,
-				local_optimization_number,
-				iteration_number,
-				neighbor_number,
-				accepted_models,
-				rejected_models;
 
-			std::string main_sampler_name,
-				local_optimizer_sampler_name;
+template <size_t ResidualDimension = 1>
+struct RANSACStatistics
+{
+	static_assert(ResidualDimension > 0, "ResidualDimension must be larger than zero!");
+	using InlierContainerType = typename std::conditional<
+		(ResidualDimension == 1),
+		std::vector<size_t>,
+		std::array<std::vector<size_t>, ResidualDimension>
+	>::type;
 
-			double processing_time,
-				score;
+	static constexpr size_t m_num_inlier_sets = ResidualDimesion;
 
-			std::vector<size_t> inliers;
+	size_t graph_cut_number{0};
+	size_t local_optimization_number{0};
+	size_t iteration_number{0};
+	size_t neighbor_number{0};
+	size_t accepted_models{0};
+	size_t rejected_models{0};
 
-			RANSACStatistics() :
-				graph_cut_number(0),
-				local_optimization_number(0),
-				iteration_number(0),
-				neighbor_number(0),
-				accepted_models(0),
-				rejected_models(0),
-				processing_time(0.0)
-			{
+	std::string main_sampler_name{};
+	std::string local_optimizer_sampler_name{};
 
-			}
-		};
-	}
+	double processing_time{0.0};
+	double score{0};
+
+	InlierContainerType inliers{};
+};
+
 }

@@ -3,6 +3,7 @@
 #include <vector>
 #include <optional>
 #include <cmath>
+#include "model.h"
 #include "solver_engine.h"
 #include "math_utils.h"
 
@@ -10,65 +11,58 @@ namespace gcransac::estimator::solver
 {
 
 // This is the estimator class for estimating a rectifying homography matrix of an image. A model estimation method and error calculation method are implemented
-class RectifyingHomographyThreeSIFTSolver : public SolverEngine<ScaleBasedRectifyingHomography>
+class RectifyingHomographyThreeSIFTSolver : public SolverEngine<ScaleBasedRectifyingHomography, 1>
 {
 public:
+    using Base = SolverEngine<ScaleBasedRectifyingHomography, 1>;
+    using Model = typename Base::Model;
+    using ResidualDimension = typename Base::ResidualDimension;
+    using InlierContainerType = typename Base::InlierContainerType;
+    using ResidualType = typename Base::ResidualType;
+    using WeightType = typename Base::WeightType;
+
     RectifyingHomographyThreeSIFTSolver() {}
     ~RectifyingHomographyThreeSIFTSolver() {}
 
-    // Determines if there is a chance of returning multiple models
-    // the function 'estimateModel' is applied.
-    static OLGA_INLINE constexpr bool returnMultipleModels()
-    {
-        return maximumSolutions() > 1;
-    }
-
-    // The maximum number of solutions returned by the estimator
-    static OLGA_INLINE constexpr size_t maximumSolutions()
-    {
-        return 1;
-    }
-    
     // The minimum number of points required for the estimation
-    static OLGA_INLINE constexpr size_t sampleSize()
-    {
-        return 3;
-    }
-
-    // It returns true/false depending on if the solver needs the gravity direction
-    // for the model estimation. 
-    static OLGA_INLINE constexpr bool needsGravity()
-    {
-        return false;
-    }
+    inline static constexpr size_t sampleSize() { return 3; }
 
     // Estimate the model parameters from the given point sample
     // using weighted fitting if possible.
     bool estimateModel(
-        const cv::Mat& data_, // The set of data points
-        const size_t *sample_, // The sample used for the estimation
-        size_t sample_number_, // The size of the sample
-        std::vector<ScaleBasedRectifyingHomography> &models_, // The estimated model parameters
-        const double *weights_ = nullptr // The weight for each point
+        const cv::Mat& data, // The set of data points
+        const InlierContainerType& inliers,
+        std::vector<ScaleBasedRectifyingHomography>& models, // The estimated model parameters
+        const WeightType& weights
     ) const;
 
-    static double residual(
-        const cv::Mat& feature, const ScaleBasedRectifyingHomography& model
-    );
+    ResidualType residual(
+        const cv::Mat& feature,
+        const ScaleBasedRectifyingHomography& model
+    ) const;
+
+    ResidualType squaredResidual(
+        const cv::Mat& feature,
+        const ScaleBasedRectifyingHomography& model
+    ) const;
 
     bool normalizePoints(
         const cv::Mat& data,
-        const size_t* sample,
-        const size_t& sample_number,
+        const InlierContainerType& inliers,
         cv::Mat& normalized_features,
         NormalizingTransform& normalizing_transform
     ) const;
 
-    void getInlierWeights(
-        const size_t* sample,
-        const size_t& sample_number,
-        const double* weights,
+    void getInlierWeightsInternal(
+        const std::vector<double>& weights,
+        const std::vector<size_t>& inliers,
         std::vector<double>& inlier_weights
+    ) const;
+
+    void getInlierWeights(
+        const WeightType& weights,
+        const InlierContainerType& inliers,
+        WeightType& inlier_weights
     ) const;
 
 protected:
@@ -77,38 +71,36 @@ protected:
     static constexpr size_t x_pos = 0; // x-coordinate position
     static constexpr size_t y_pos = 1; // y-coordinate position
     static constexpr size_t s_pos = 2; // scale position
+    static constexpr size_t feature_size = 3;
 
     bool estimateNonMinimalModel(
-        const cv::Mat &data_,
-        const size_t *sample_,
-        size_t sample_number_,
-        std::vector<ScaleBasedRectifyingHomography> &models_,
-        const double *weights_
+        const cv::Mat &data,
+        const std::vector<size_t>& inliers,
+        std::vector<ScaleBasedRectifyingHomography> &models,
+        const std::vector<double>& weights
     ) const;
 
     bool estimateMinimalModel(
-        const cv::Mat &data_,
-        const size_t *sample_,
-        size_t sample_number_,
-        std::vector<ScaleBasedRectifyingHomography> &models_
+        const cv::Mat& data,
+        const std::vector<size_t>& inliers,
+        std::vector<ScaleBasedRectifyingHomography>& models
     ) const;
 
 };
 
 bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
-    const cv::Mat &data_, // The set of data points
-    const size_t *sample_, // The sample used for the estimation
-    size_t sample_number_, // The size of the sample
-    std::vector<ScaleBasedRectifyingHomography> &models_ // The estimated model parameters
+    const cv::Mat& data,
+    const std::vector<size_t>& inliers,
+    std::vector<ScaleBasedRectifyingHomography>& models
 ) const
 {
-    if (sample_number_ != sampleSize())
+    if (inliers.size() != sampleSize())
     {
         fprintf(
             stderr,
             "Minimal model requires exactly %d samples (received %d).\n",
             sampleSize(),
-            sample_number_
+            inliers.size()
         );
         return false;
     }
@@ -152,28 +144,34 @@ bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
 }
 
 bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
-    const cv::Mat &data_,
-    const size_t *sample_,
-    size_t sample_number_,
-    std::vector<ScaleBasedRectifyingHomography> &models_,
-    const double *weights_
+    const cv::Mat &data,
+    const std::vector<size_t>& inliers,
+    std::vector<ScaleBasedRectifyingHomography> &models,
+    const std::vector<double>& weights
 ) const
 {
-    // helper functions to fetch correct sample and weight 
-    auto get_sample_ptr = [sample_, &data_](const size_t& i) {
-        const auto *data_ptr = reinterpret_cast<double*>(data_.data);
-        const size_t idx = (sample_ == nullptr) ? i : sample_[i];
-        return data_ptr + idx * data_.cols;
+    // helper functions to fetch correct sample and weight
+    const auto* data_ptr = reinterpret_cast<double*>(data.data);
+    auto get_inlier = [&data_ptr, &inliers, &data](const size_t& feature_idx)
+    {
+        const size_t& idx = inliers.empty() ?
+                            feature_idx :
+                            inliers[feature_idx];
+        return data_ptr + idx * data.cols;
     };
-    auto get_weight = [sample_, weights_](const size_t& i) {
-        const size_t idx = (sample_ == nullptr) ? i : sample_[i];
-        return (weights_ == nullptr) ? 1.0 : weights_[idx];
+    auto get_weight = [&inliers, &weights](const size_t& feature_idx)
+    {
+        const size_t& idx = inliers.empty() ?
+                            feature_idx :
+                            inliers[feature_idx];
+        return weights.empty() ? 1.0 : weights[idx];
     };
 
-    Eigen::MatrixXd coeffs(sample_number_, 3);
-    Eigen::MatrixXd rhs(sample_number_, 1);
+    const auto n_rows = inliers.size();
+    Eigen::Matrix<double, Eigen::Dynamic, 3> coeffs(n_rows, 3);
+    Eigen::VectorXd rhs(n_rows, 1);
 
-    for (size_t i = 0; i < sample_number_; ++i)
+    for (size_t i = 0; i < n_rows; ++i)
     {
         const auto* sample = get_sample_ptr(i);
         const auto w = get_weight(i);
@@ -208,30 +206,41 @@ bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
 }
 
 bool RectifyingHomographyThreeSIFTSolver::estimateModel(
-    const cv::Mat& data_, // The set of data points
-    const size_t* sample_, // The sample used for the estimation
-    size_t sample_number_, // The size of the sample
-    std::vector<ScaleBasedRectifyingHomography>& models_, // The estimated model parameters
-    const double* weights_ // The weight for each point
+    const cv::Mat& data, // The set of data points
+    const InlierContainerType& inliers,
+    std::vector<ScaleBasedRectifyingHomography>& models, // The estimated model parameters
+    const WeightsType& weights
 ) const
 {
-    if (sample_number_ < sampleSize())
+    if (inliers.size() != 1 || weights.size() != 1)
     {
-        fprintf(stderr,
-            "There weren't enough SIFT features provided for the solver (%d < %d).\n",
-            sample_number_,
-            sampleSize()
+        fprintf(
+            stderr,
+            "The wrong number of inlier sets or weights sets was given. "
+            "Expected 1 inlier set and 1 weight set. "
+            "Received %ld inliers sets and %ld weights sets.\n",
+            inliers.size(), weights.size()
         );
         return false;
     }
-    if (sample_number_ == sampleSize())
+    const auto& inliers_vec = inliers[0];
+    const auto& weights_vec = weights[0];
+    if (inliers_vec.size() < sampleSize())
     {
-        return estimateMinimalModel(data_, sample_, sample_number_, models_);
+        fprintf(stderr,
+            "There weren't enough SIFT features provided for the solver "
+            "(%d < %d).\n", inliers_vec.size(), sampleSize()
+        );
+        return false;
     }
-    return estimateNonMinimalModel(data_, sample_, sample_number_, models_, weights_);
+    if (inliers_vec.size() == sampleSize())
+    {
+        return estimateMinimalModel(data, inliers_vec, models);
+    }
+    return estimateNonMinimalModel(data, inliers_vec, models, weights_vec);
 }
 
-double RectifyingHomographyThreeSIFTSolver::residual(
+ResidualType RectifyingHomographyThreeSIFTSolver::residual(
     const cv::Mat& feature,
     const ScaleBasedRectifyingHomography& model
 )
@@ -255,10 +264,19 @@ double RectifyingHomographyThreeSIFTSolver::residual(
     return r_scale;
 }
 
+ResidualType squaredResidual(
+    const cv::Mat& feature,
+    const ScaleBasedRectifyingHomography& model
+)
+{
+    const auto r = residual(feature, model);
+    return r * r;
+}
+
 bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     const cv::Mat& data, // The data points
-    const size_t* sample, // The points to which the model will be fit
-    const size_t& sample_number,// The number of points
+    const InlierContainerType& inliers,
+    const size_t& sample_size,
     cv::Mat& normalized_features, // The normalized features
     NormalizingTransform& normalizing_transform // the normalization transformation model
 ) const
@@ -329,7 +347,7 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
         norm_features_ptr[i * normalized_features.cols + s_pos] = norm_scale;
         // ensures that if the dimension of the features is larger
         // than 3, then the normalization will still succeed.
-        for (size_t j = 3; j < normalized_features.cols; j++)
+        for (size_t j = feature_size; j < normalized_features.cols; j++)
         {
 			norm_features_ptr[i * normalized_features.cols + j] = feature[j];
         }
@@ -338,23 +356,33 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     return true;
 }
 
-void RectifyingHomographyThreeSIFTSolver::getInlierWeights(
-    const size_t* sample,
-    const size_t& sample_number,
-    const double* weights,
+void RectifyingHomographyThreeSIFTSolver::getInlierWeightsInternal(
+    const std::vector<double>& weights,
+    const std::vector<size_t>& inliers,
     std::vector<double>& inlier_weights
 ) const
 {
-    auto get_weight = [sample, weights](const size_t& i) {
-        const size_t idx = (sample == nullptr) ? i : sample[i];
-        return (weights == nullptr) ? 1.0 : weights[idx];
-    };
-    inlier_weights.clear();
-    inlier_weights.reserve(sample_number);
-    for (size_t i = 0; i < sample_number; i++)
+    if (weights.empty())
     {
-        inlier_weights.push_back(get_weight(i));
+        inlier_weights = {};
+        return;
     }
+    inlier_weights.clear();
+    inlier_weights.reserve(inliers.size());
+    for (size_t j = 0; j < inliers.size(); j++)
+    {
+        const auto idx = inliers.empty() ? j : inliers[j];
+        inlier_weights.push_back(weights[idx]);
+    }
+}
+
+void RectifyingHomographyThreeSIFTSolver::getInlierWeights(
+    const WeightType& weights,
+    const InlierContainerType& inliers,
+    WeightType& inlier_weights
+) const
+{
+    getInlierWeightsInternal(weights[0], inliers[0], inlier_weights[0]);
 }
 
 }

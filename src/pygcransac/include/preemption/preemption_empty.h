@@ -37,33 +37,40 @@
 #include <opencv2/core.hpp>
 #include <Eigen/Eigen>
 
-namespace gcransac
+namespace gcransac::preemption
 {
-	namespace preemption
+
+template <typename _ModelEstimator, typename _ModelType = Model, size_t ResidualDim = 1>
+class EmptyPreemptiveVerfication
+{
+public:
+	using ResidualType = typename std::conditional<
+		(ResidualDim == 1), double, Eigen::Array<double, ResidualDim, 1>
+	>::type;
+	using InlierContainerType = typename std::conditional<
+		(ResidualDim == 1),
+		std::vector<size_t>,
+		std::array<std::vector<size_t>, ResidualDim>
+	>::type;
+
+	static constexpr bool providesScore() { return false; }
+	static constexpr const char *getName() { return "empty"; }
+
+	static constexpr bool verifyModel(
+		const _ModelType& model_, // The current model
+		const _ModelEstimator& estimator_, // The model estimator
+		const ResidualType& threshold_, // The truncated threshold
+		const size_t& iteration_number_, // The current iteration number
+		const Score& best_score_, // The current best score
+		const cv::Mat& points_, // The data points
+		const size_t* minimal_sample_, // The current minimal sample
+		const size_t sample_number_, // The number of samples used
+		InlierContainerType& inliers_,// The current inlier set
+		Score& score_, // The score of the model
+		const std::vector<const std::vector<size_t>*>* index_sets_ = nullptr) // Sets of pre-selected point indices
 	{
-		template <typename _ModelEstimator, typename _ModelType = Model, typename _ResidualType = double>
-		class EmptyPreemptiveVerfication
-		{
-
-		public:
-			static constexpr bool providesScore() { return false; }
-			static constexpr const char *getName() { return "empty"; }
-
-			static constexpr bool verifyModel(
-				const _ModelType &model_, // The current model
-				const _ModelEstimator &estimator_, // The model estimator
-				const _ResidualType &threshold_, // The truncated threshold
-				const size_t &iteration_number_, // The current iteration number
-				const Score &best_score_, // The current best score
-				const cv::Mat &points_, // The data points
-				const size_t *minimal_sample_, // The current minimal sample
-				const size_t sample_number_, // The number of samples used
-				std::vector<size_t> &inliers_,// The current inlier set
-				Score &score_, // The score of the model
-				const std::vector<const std::vector<size_t>*> *index_sets_ = nullptr) // Sets of pre-selected point indices
-			{
-				return true;
-			}
-		};
+		return true;
 	}
+};
+
 }

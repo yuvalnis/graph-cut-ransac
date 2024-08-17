@@ -33,25 +33,22 @@
 // Author: Daniel Barath (barath.daniel@sztaki.mta.hu)
 #pragma once
 
-#include <math.h>
-#include <chrono>
-#include <random>
+#include <array>
 #include <vector>
-
 #include <opencv2/core/core.hpp>
-#include <unsupported/Eigen/Polynomials>
-#include <Eigen/Eigen>
-
-#include "model.h"
 
 namespace gcransac::estimator::solver
 {
-// This is the estimator class for estimating a homography matrix between two images. A model estimation method and error calculation method are implemented
-template <class ModelType = gcransac::Model>
+
+template <class Model_t, size_t ResidualDimension_t>
 class SolverEngine
 {
 public:
-	using Model = ModelType;
+	using Model = Model_t;
+	using ResidualDimension = ResidualDimension_t;
+	using InlierContainerType = std::array<std::vector<size_t>, ResidualDimension>;
+	using ResidualType = Eigen::Array<double, ResidualDimension, 1>;
+	using WeightType = std::array<std::vector<double>, ResidualDimension>;
 
 	SolverEngine() {}
 
@@ -59,32 +56,28 @@ public:
 
 	// Determines if there is a chance of returning multiple models
 	// the function 'estimateModel' is applied.
-	static constexpr bool returnMultipleModels()
-	{
+	inline static constexpr bool returnMultipleModels()
+	{ 
 		return maximumSolutions() > 1;
 	}
 
 	// The maximum number of solutions returned by the estimator
-	static constexpr size_t maximumSolutions()
-	{
-		return 1;
-	}
+	inline static constexpr size_t maximumSolutions() { return 1; }
 
 	// The minimum number of points required for the estimation
-	static constexpr size_t sampleSize()
-	{
-		return 0;
-	}
+	inline static constexpr size_t sampleSize() { return 0; }
 
 	// Estimate the model parameters from the given point sample
 	// using weighted fitting if possible.
-	virtual OLGA_INLINE bool estimateModel(
-		const cv::Mat& data_,
-		const size_t *sample_,
-		size_t sample_number_,
-		std::vector<Model> &models_,
-		const double *weights_ = nullptr
+	virtual bool estimateModel(
+		const cv::Mat& data,
+		const InlierContainerType& inliers,
+		std::vector<Model>& models,
+		const WeightType& weights
 	) const = 0;
+
+	virtual ResidualType residual(const cv::Mat& feature, const Model& model) const = 0;
+	virtual ResidualType squaredResidual(const cv::Mat& feature, const Model& model) const = 0;
 };
 
 }

@@ -41,13 +41,14 @@ namespace gcransac
 	{
         template <
             typename _Estimator,
-            typename _NeighborhoodStructure,
-            typename _ResidualType = double
-        > class EmptyInlierSelector : public AbstractInlierSelector<_Estimator, _NeighborhoodStructure, _ResidualType>
+            typename _NeighborhoodStructure
+        > class EmptyInlierSelector : public AbstractInlierSelector<_Estimator, _NeighborhoodStructure>
         {
         public:
+            using _ResidualType = typename _ModelEstimator::ResidualType;
+
             explicit EmptyInlierSelector(const _NeighborhoodStructure *kNeighborhoodGraph_) : 
-                AbstractInlierSelector<_Estimator, _NeighborhoodStructure, _ResidualType>(kNeighborhoodGraph_)
+                AbstractInlierSelector<_Estimator, _NeighborhoodStructure>(kNeighborhoodGraph_)
             {
 
             }

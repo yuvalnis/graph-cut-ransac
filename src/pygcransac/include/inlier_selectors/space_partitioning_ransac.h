@@ -43,10 +43,8 @@ namespace gcransac
 {
     namespace inlier_selector
     {
-        template <
-            typename _Estimator,
-            typename _NeighborhoodStructure>
-            class SpacePartitioningRANSAC : public AbstractInlierSelector<_Estimator, _NeighborhoodStructure>
+        template <typename _Estimator, typename _NeighborhoodStructure>
+        class SpacePartitioningRANSAC : public AbstractInlierSelector<_Estimator, _NeighborhoodStructure>
         {
         protected:
             std::vector<bool> gridCornerMask;
@@ -113,14 +111,16 @@ namespace gcransac
         // The function that runs the model-based inlier selector
         template <
             typename _Estimator,
-            typename _NeighborhoodStructure>
-            void SpacePartitioningRANSAC<_Estimator, _NeighborhoodStructure>::run(
-                const cv::Mat& kCorrespondences_, // All point correspondences
-                const gcransac::Model& kModel_, // The model parameters
-                const _NeighborhoodStructure& kNeighborhood_, // The neighborhood structure. This probably will be a GridNeighborhood currently.
-                const double& inlierOutlierThreshold_,
-                std::vector<const std::vector<size_t>*>& selectedCells_, // The indices of the points selected
-                size_t& pointNumber_)
+            typename _NeighborhoodStructure
+        >
+        void SpacePartitioningRANSAC<_Estimator, _NeighborhoodStructure>::run(
+            const cv::Mat& kCorrespondences_, // All point correspondences
+            const gcransac::Model& kModel_, // The model parameters
+            const _NeighborhoodStructure& kNeighborhood_, // The neighborhood structure. This probably will be a GridNeighborhood currently.
+            const double& inlierOutlierThreshold_,
+            std::vector<const std::vector<size_t>*>& selectedCells_, // The indices of the points selected
+            size_t& pointNumber_
+        )
         {
             // Initializing the selected point number to zero
             pointNumber_ = 0;

@@ -36,62 +36,41 @@
 #include <numeric>
 #include <Eigen/Dense>
 
-namespace gcransac
+namespace gcransac::utils
 {
-	namespace utils
+
+struct Settings
+{
+	bool do_final_iterated_least_squares{true}; // Flag to decide a final iterated least-squares fitting is needed to polish the output model parameters.
+	bool do_local_optimization{true}; // Flag to decide if local optimization is needed
+	bool do_graph_cut{true}; // Flag to decide of graph-cut is used in the local optimization
+	bool use_inlier_limit{false}; // Flag to decide if an inlier limit is used in the local optimization to speed up the procedure
+
+	double desired_fps{-1.0}; // The desired FPS
+
+	size_t max_local_optimization_number{10}; // Maximum number of local optimizations
+	size_t min_iteration_number_before_lo{20}; // Minimum number of RANSAC iterations before applying local optimization
+	size_t min_iteration_number{20}; // Minimum number of RANSAC iterations
+	size_t max_iteration_number{std::numeric_limits<size_t>::max()}; // Maximum number of RANSAC iterations
+	size_t max_unsuccessful_model_generations{100}; // Maximum number of unsuccessful model generations
+	size_t max_least_squares_iterations{10}; // Maximum number of iterated least-squares iterations
+	size_t max_graph_cut_number{10}; // Maximum number of graph-cuts applied in each iteration
+	size_t core_number{1}; // Number of parallel threads
+
+	double confidence{0.95}; // Required confidence in the result
+	double neighborhood_sphere_radius{20.0}; // The radius of the ball used for creating the neighborhood graph
+	double spatial_coherence_weight{0.14}; // The weight of the spatial coherence term
+
+	Eigen::ArrayXd threshold; // the inlier-outlier threshold
+
+	Settings(const size_t& thresh_dim)
 	{
-
-		template <typename ResidualType = double>
-		struct Settings {
-			bool do_final_iterated_least_squares, // Flag to decide a final iterated least-squares fitting is needed to polish the output model parameters.
-				do_local_optimization, // Flag to decide if local optimization is needed
-				do_graph_cut, // Flag to decide of graph-cut is used in the local optimization
-				use_inlier_limit; // Flag to decide if an inlier limit is used in the local optimization to speed up the procedure
-
-			double desired_fps; // The desired FPS
-
-			size_t max_local_optimization_number, // Maximum number of local optimizations
-				min_iteration_number_before_lo, // Minimum number of RANSAC iterations before applying local optimization
-				min_iteration_number, // Minimum number of RANSAC iterations
-				max_iteration_number, // Maximum number of RANSAC iterations
-				max_unsuccessful_model_generations, // Maximum number of unsuccessful model generations
-				max_least_squares_iterations, // Maximum number of iterated least-squares iterations
-				max_graph_cut_number, // Maximum number of graph-cuts applied in each iteration
-				core_number; // Number of parallel threads
-
-			double confidence, // Required confidence in the result
-				neighborhood_sphere_radius, // The radius of the ball used for creating the neighborhood graph
-				spatial_coherence_weight; // The weight of the spatial coherence term
-
-			ResidualType threshold; // the inlier-outlier threshold
-
-			Settings() :
-				do_final_iterated_least_squares(true),
-				do_local_optimization(true),
-				do_graph_cut(true),
-				use_inlier_limit(false),
-				desired_fps(-1),
-				max_local_optimization_number(10),
-				max_graph_cut_number(10),
-				max_least_squares_iterations(10),
-				min_iteration_number_before_lo(20),
-				min_iteration_number(20),
-				neighborhood_sphere_radius(20),
-				max_iteration_number(std::numeric_limits<size_t>::max()),
-				max_unsuccessful_model_generations(100),
-				core_number(1),
-				spatial_coherence_weight(0.14),
-				confidence(0.95)
-			{
-				if constexpr (std::is_same_v<ResidualType, double>)
-				{
-					threshold = 2.0;
-				}
-				else
-				{
-					threshold.setConstant(2.0);
-				}
-			}
-		};		
+		// Ensure the dimension is greater than 0
+        if (thresh_dim == 0) {
+            throw std::invalid_argument("thresh_dim must be greater than 0");
+        }
+		threshold = Eigen::ArrayXd::Constant(thresh_dim, 2.0);
 	}
+};
+	
 }

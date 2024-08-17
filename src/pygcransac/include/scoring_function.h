@@ -71,11 +71,13 @@ namespace gcransac
 		}
 	};
 
-	template<class _ModelEstimator, typename _ResidualType = double>
+	template<class _ModelEstimator>
 	class ScoringFunction
 	{
 	public:
-		typedef typename _ModelEstimator::Model Model;
+		using Estimator = _ModelEstimator;
+		using Model = Estimator::Model;
+		using ResidualType = Estimator::ResidualType;
 
 		ScoringFunction()
 		{
@@ -90,42 +92,44 @@ namespace gcransac
 		virtual OLGA_INLINE Score getScore(
 			const cv::Mat &points_, // The input data points
 			Model &model_, // The current model parameters
-			const _ModelEstimator &estimator_, // The model estimator
-			const _ResidualType& threshold_, // The inlier-outlier threshold
+			const Estimator &estimator_, // The model estimator
+			const ResidualType& threshold_, // The inlier-outlier threshold
 			std::vector<size_t> &inliers_, // The selected inliers
 			const Score &best_score_ = Score(), // The score of the current so-far-the-best model
 			const bool store_inliers_ = true, // A flag to decide if the inliers should be stored
 			const std::vector<const std::vector<size_t>*> *index_sets = nullptr // Index sets to be verified
 		) const = 0;
 
-		virtual void initialize(const _ResidualType& threshold_,
-								const size_t point_number_) = 0;
+		virtual void initialize(
+			const ResidualType& threshold_,
+			const size_t point_number_
+		) = 0;
 
 	};
 
-	template<class _ModelEstimator, typename _ResidualType = double>
-		class MSACScoringFunction : public ScoringFunction<_ModelEstimator, _ResidualType>
+	template<class _ModelEstimator>
+	class MSACScoringFunction : public ScoringFunction<_ModelEstimator>
 	{
 	protected:
-		_ResidualType squared_truncated_threshold; // Squared truncated threshold
+		ResidualType squared_truncated_threshold; // Squared truncated threshold
 		size_t point_number; // Number of points
 		// Verify only every k-th point when doing the score calculation. This maybe is beneficial if
 		// there is a time sensitive application and verifying the model on a subset of points
 		// is enough.
 		size_t verify_every_kth_point;
+		const size_t m_residual_dimension;
 
 	public:
-		typedef typename _ModelEstimator::Model Model;
+		using Estimator = _ModelEstimator;
+		using Model = Estimator::Model;
+		using ResidualType = Estimator::ResidualType;
 
-		MSACScoringFunction() : verify_every_kth_point(1)
-		{
+		MSACScoringFunction() : 
+			verify_every_kth_point(1), 
+			m_residual_dimension(Estimator::residualDimension())
+		{}
 
-		}
-
-		~MSACScoringFunction()
-		{
-
-		}
+		~MSACScoringFunction() {}
 
 		void setSkippingParameter(const size_t verify_every_kth_point_)
 		{
@@ -133,7 +137,7 @@ namespace gcransac
 		}
 
 		void initialize(
-			const _ResidualType& squared_truncated_threshold_,
+			const ResidualType& squared_truncated_threshold_,
 			const size_t point_number_
 		)
 		{
@@ -144,7 +148,7 @@ namespace gcransac
 		Score getScoreSingleResidual(
 			const cv::Mat& points_, // The input data points
 			Model& model_, // The current model parameters
-			const _ModelEstimator& estimator_, // The model estimator
+			const Estimator& estimator_, // The model estimator
 			std::vector<size_t>& inliers_, // The selected inliers
 			const Score& best_score_, // The score of the current so-far-the-best model
 			const bool store_inliers_, // A flag to decide if the inliers should be stored
@@ -241,7 +245,7 @@ namespace gcransac
 			const cv::Mat& points_,
 			size_t point_idx_,
 			Model& model_,
-			const _ModelEstimator& estimator_,
+			const Estimator& estimator_,
 			std::vector<size_t>& inliers_,
 			const bool store_inliers_,
 			Score& score_
@@ -273,7 +277,7 @@ namespace gcransac
 		Score getScoreMultipleResiduals(
 			const cv::Mat& points_, // The input data points
 			Model& model_, // The current model parameters
-			const _ModelEstimator& estimator_, // The model estimator
+			const Estimator& estimator_, // The model estimator
 			std::vector<size_t>& inliers_, // The selected inliers
 			const Score& best_score_, // The score of the current so-far-the-best model
 			const bool store_inliers_, // A flag to decide if the inliers should be stored
@@ -327,15 +331,15 @@ namespace gcransac
 		OLGA_INLINE Score getScore(
 			const cv::Mat& points_, // The input data points
 			Model& model_, // The current model parameters
-			const _ModelEstimator& estimator_, // The model estimator
-			const _ResidualType& threshold_, // The inlier-outlier threshold
+			const Estimator& estimator_, // The model estimator
+			const ResidualType& threshold_, // The inlier-outlier threshold
 			std::vector<size_t>& inliers_, // The selected inliers
 			const Score& best_score_ = Score(), // The score of the current so-far-the-best model
 			const bool store_inliers_ = true, // A flag to decide if the inliers should be stored
 			const std::vector<const std::vector<size_t>*> *index_sets = nullptr // Index sets to be verified
 		) const
 		{
-			if constexpr (std::is_same_v<_ResidualType, double>)
+			if constexpr (m_residual_dimension == 1)
 			{
 				return getScoreSingleResidual(
 					points_, model_, estimator_, inliers_,
