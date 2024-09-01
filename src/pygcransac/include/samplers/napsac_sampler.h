@@ -43,7 +43,7 @@ namespace gcransac
 	namespace sampler
 	{
 		template<typename _NeighborhoodGraph>
-		class NapsacSampler : public Sampler < cv::Mat, size_t >
+		class NapsacSampler : public Sampler
 		{
 		protected:
 			std::unique_ptr<utils::UniformRandomGenerator<size_t>> random_generator;

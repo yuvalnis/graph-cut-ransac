@@ -34,16 +34,14 @@
 #pragma once
 
 #include "neighborhood_graph.h"
-#include <vector>
+#include <opencv2/features2d.hpp>
 #include <opencv2/core/core.hpp>
-#include <Eigen/Eigen>
-#include "../estimators/estimator.h"
 
 namespace gcransac
 {
 	namespace neighborhood 
 	{
-		class FlannNeighborhoodGraph : public NeighborhoodGraph<cv::Mat>
+		class FlannNeighborhoodGraph : public NeighborhoodGraph
 		{
 		public:
 			// The possible methods for building the neighborhood graph.

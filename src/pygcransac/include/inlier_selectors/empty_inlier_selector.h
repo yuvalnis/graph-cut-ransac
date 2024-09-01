@@ -35,36 +35,37 @@
 
 #include "inlier_selector.h"
 
-namespace gcransac
+namespace gcransac::inlier_selector
 {
-	namespace inlier_selector
-	{
-        template <
-            typename _Estimator,
-            typename _NeighborhoodStructure,
-            typename _ResidualType = double
-        > class EmptyInlierSelector : public AbstractInlierSelector<_Estimator, _NeighborhoodStructure, _ResidualType>
-        {
-        public:
-            explicit EmptyInlierSelector(const _NeighborhoodStructure *kNeighborhoodGraph_) : 
-                AbstractInlierSelector<_Estimator, _NeighborhoodStructure, _ResidualType>(kNeighborhoodGraph_)
-            {
 
-            }
+template <typename _Estimator, typename _NeighborhoodStructure>
+class EmptyInlierSelector : public AbstractInlierSelector<_Estimator, _NeighborhoodStructure>
+{
+public:
+    using Base = AbstractInlierSelector<_Estimator, _NeighborhoodStructure>;
+    using Model = typename Base::Model;
+    using ResidualType = typename Base::ResidualType;
 
-            static constexpr bool doesSomething() { return false; }
+    explicit EmptyInlierSelector(const _NeighborhoodStructure *kNeighborhoodGraph_) : 
+        AbstractInlierSelector<_Estimator, _NeighborhoodStructure>(kNeighborhoodGraph_)
+    {
 
-            // The function that runs the model-based inlier selector
-            void run(
-                const cv::Mat& kCorrespondences_, // All point correspondences
-                const gcransac::Model& kModel_, // The model parameters
-                const _NeighborhoodStructure& kNeighborhood_, // The neighborhood structure. This probably will be a GridNeighborhood currently.
-                const _ResidualType& inlierOutlierThreshold_,
-                std::vector<const std::vector<size_t>*>& selectedCells_, // The indices of the points selected
-                size_t& pointNumber_)
-            {
-                
-            } 
-        };
     }
+
+    static constexpr bool doesSomething() { return false; }
+
+    // The function that runs the model-based inlier selector
+    void run(
+        const cv::Mat& kCorrespondences_, // All point correspondences
+        const Model& kModel_, // The model parameters
+        const _NeighborhoodStructure& kNeighborhood_, // The neighborhood structure. This probably will be a GridNeighborhood currently.
+        const ResidualType& inlierOutlierThreshold_,
+        std::vector<const std::vector<size_t>*>& selectedCells_, // The indices of the points selected
+        size_t& pointNumber_
+    )
+    {
+        
+    } 
+};
+
 }

@@ -6,10 +6,11 @@
 #include <cmath>
 #include <random>
 #include <vector>
+#include <set>
+#include <numeric>
 #include <Eigen/Eigen>
 #include "estimator.h"
 #include "model.h"
-
 
 namespace gcransac::estimator
 {
@@ -17,109 +18,143 @@ namespace gcransac::estimator
 // This is the estimator class for estimating a rectifying homography matrix
 // between a warped image and its rectified counterpart. A model estimation 
 // method and error calculation method are implemented.
-template<
-    class _MinimalSolverEngine, // The solver used for estimating the model from a minimal sample
-    class _NonMinimalSolverEngine, // The solver used for estimating the model from a non-minimal sample
-    class _ModelType,
-    typename _ResidualType = double
-> class RectifyingHomographyEstimator : public Estimator<cv::Mat, _ModelType, _ResidualType>
+template<class Solver>
+class RectifyingHomographyEstimator : public Estimator<Solver>
 {
-protected:
-    // Minimal solver engine used for estimating a model from a minimal sample
-    const std::shared_ptr<_MinimalSolverEngine> minimal_solver;
+public:
 
-    // Non-minimal solver engine used for estimating a model from a bigger than minimal sample
-    const std::shared_ptr<_NonMinimalSolverEngine> non_minimal_solver;
+    using Base = Estimator<Solver>;
+    using Model = typename Base::Model;
+    using ResidualDimension = typename Base::ResidualDimension;
+    using ResidualType = typename Base::ResidualType;
+    using InlierContainerType = typename Base::InlierContainerType;
+    using WeightType = typename Base::WeightType;
+    using SampleSizeType = typename Base::SampleSizeType;
+
+protected:
+
+    const std::shared_ptr<Solver> solver;
+
+private:
+
+    const SampleSizeType m_inliers_limit;
+
+    static inline SampleSizeType computeInlierLimit(
+        const SampleSizeType& sample_sizes
+    )
+    {
+        SampleSizeType result{};
+        for (size_t i = 0; i < ResidualDimension::value; i++)
+        {
+            result[i] = 7 * sample_sizes[i]; 
+        }
+        return result;
+    }
+
+    static void getInlierWeights(
+        const WeightType& weights,
+        const InlierContainerType& inliers,
+        WeightType& inlier_weights
+    )
+    {
+        for (size_t i = 0; i < ResidualDimension::value; i++)
+        {
+            const auto& weights_i = weights[i];
+            if (weights_i.empty())
+            {
+                inlier_weights[i] = {};
+                continue;
+            }
+            const auto& inliers_i = inliers[i];
+            auto& inlier_weights_i = inlier_weights[i];
+            inlier_weights_i.clear();
+            inlier_weights_i.reserve(inliers_i.size());
+            for (size_t j = 0; j < inliers_i.size(); j++)
+            {
+                const auto idx = inliers_i.empty() ? j : inliers_i[j];
+                inlier_weights_i.push_back(weights_i[idx]);
+            }
+        }
+    }
 
 public:
 
     RectifyingHomographyEstimator() :
-        minimal_solver(std::make_shared<_MinimalSolverEngine>()),
-        non_minimal_solver(std::make_shared<_NonMinimalSolverEngine>())
+        solver(std::make_shared<Solver>()),
+        m_inliers_limit(computeInlierLimit(sampleSize()))
     {}
     
     ~RectifyingHomographyEstimator() {}
 
-    OLGA_INLINE const _MinimalSolverEngine* getMinimalSolver() const
+    inline SampleSizeType sampleSize() const
     {
-        return minimal_solver.get();
-    }
-
-    OLGA_INLINE _MinimalSolverEngine* getMutableMinimalSolver()
-    {
-        return minimal_solver.get();
-    }
-
-    OLGA_INLINE const _NonMinimalSolverEngine* getNonMinimalSolver() const
-    {
-        return non_minimal_solver.get();
-    }
-
-    OLGA_INLINE _NonMinimalSolverEngine* getMutableNonMinimalSolver()
-    {
-        return non_minimal_solver.get();
-    }
-
-    OLGA_INLINE static constexpr size_t nonMinimalSampleSize()
-    {
-        return _NonMinimalSolverEngine::sampleSize();
-    }
-
-    OLGA_INLINE static constexpr size_t sampleSize()
-    {
-        return _MinimalSolverEngine::sampleSize();
-    }
-
-    // A flag deciding if the points can be weighted when the non-minimal fitting is applied 
-    OLGA_INLINE static constexpr bool isWeightingApplicable()
-    {
-        return true;
+        return solver->sampleSize();
     }
 
     // The size of a minimal sample_ required for the estimation
     OLGA_INLINE static constexpr size_t maximumMinimalSolutions()
     {
-        return _MinimalSolverEngine::maximumSolutions();
+        return Solver::maximumSolutions();
     }
 
     // The size of a sample when doing inner RANSAC on a non-minimal sample
-    OLGA_INLINE size_t inlierLimit() const
+    inline const SampleSizeType& inlierLimit() const 
     {
-        return 7 * sampleSize();
+        return m_inliers_limit;
     }
+
+    // Given a model and a data point, calculate the error. Users should implement
+	// this function appropriately for the task being solved.
+	inline ResidualType residual(const cv::Mat& data, const Model& model) const
+	{
+		return solver->residual(data, model);
+	}
+
+	inline ResidualType squaredResidual(const cv::Mat& data, const Model& model) const
+	{
+		return solver->squaredResidual(data, model);
+	}
 
     // Estimating the model from a minimal sample
     OLGA_INLINE bool estimateModel(
-        const cv::Mat& data_, // The data points
-        const size_t* sample_, // The sample usd for the estimation
-        std::vector<_ModelType>* models_ // The estimated model parameters
+        const cv::Mat& data,
+		const InlierContainerType& inliers,
+		std::vector<Model>& models
     ) const
     {
-        return minimal_solver->estimateModel(
-            data_, sample_, sampleSize(), *models_, nullptr
-        );
+        return solver->estimateModel(data, inliers, models);
     }
 
     // Estimating the model from a non-minimal sample
     OLGA_INLINE bool estimateModelNonminimal(
-        const cv::Mat& data_, // The data points
-        const size_t* sample_, // The sample used for the estimation
-        const size_t& sample_number_, // The size of a minimal sample
-        std::vector<_ModelType>* models_,
-        const double *weights_ = nullptr // The estimated model parameters
+        const cv::Mat& data,
+		const InlierContainerType& inliers,
+		std::vector<Model>& models,
+		const WeightType& weights = WeightType{}
     ) const
     {
-        if (sample_number_ < nonMinimalSampleSize())
+        for (size_t i = 0; i < ResidualDimension::value; i++)
         {
-            return false;
+            if (inliers[i].size() < sampleSize()[i])
+            {
+                return false;
+            }
         }
+        // since all data types are joined in the same data set, we compute
+        // the indices which are inliers in any of the sub-types.
+        std::set<size_t> union_set;
+        for (const auto& inlier_set : inliers)
+        {
+            union_set.insert(inlier_set.begin(), inlier_set.end());
+        }
+        std::vector<size_t> inlier_union(union_set.begin(), union_set.end());
         // normalize features
         cv::Mat normalized_features(
-            sample_number_, data_.cols, data_.type()
+            inlier_union.size(), data.cols, data.type()
         );
         NormalizingTransform normalizing_transform;
-        bool success = non_minimal_solver->normalizePoints(
-            data_, sample_, sample_number_, normalized_features,
+        bool success = solver->normalizePoints(
+            data, inlier_union, normalized_features,
             normalizing_transform
         );
         if (!success)
@@ -128,52 +163,26 @@ public:
         }
         // only inlier features are used to estimate model so the same must
         // be done for the weights.
-        std::vector<double> inlier_weights;
-        non_minimal_solver->getInlierWeights(
-            sample_, sample_number_, weights_, inlier_weights
+        WeightType inlier_weights;
+        getInlierWeights(
+            weights, inliers, inlier_weights
         );
         // sample_ = nullptr because normalized features and wieights are now
         // made up only of inlier features and weights.
-        success = non_minimal_solver->estimateModel(
-            normalized_features, nullptr, sample_number_, *models_,
-            inlier_weights.data()
+        success = solver->estimateModel(
+            normalized_features, InlierContainerType{}, models, inlier_weights
         );
         if (!success)
         {
             return false;
         }
-        for (auto& model : *models_)
+        for (auto& model : models)
         {
             model.x0 = normalizing_transform.x0;
             model.y0 = normalizing_transform.y0; 
             model.s = normalizing_transform.s;
         }
         return true;
-    }
- 
-    OLGA_INLINE _ResidualType residual(
-        const cv::Mat& feature_,
-        const _ModelType& model_
-    ) const
-    {
-        return _MinimalSolverEngine::residual(feature_, model_);
-    }
-
-    OLGA_INLINE _ResidualType squaredResidual(
-        const cv::Mat& feature_,
-        const _ModelType& model_
-    ) const
-    {
-        auto r = residual(feature_, model_);
-        if constexpr (std::is_same_v<_ResidualType, double>)
-		{
-            r = r * r;
-        }
-        else
-        {
-            r = r.cwiseProduct(r);
-        }
-        return r;
     }
 };
 

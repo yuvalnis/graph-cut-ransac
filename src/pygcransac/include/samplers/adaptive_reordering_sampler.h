@@ -43,7 +43,7 @@ namespace gcransac
 {
 	namespace sampler
 	{
-		class AdaptiveReorderingSampler : public Sampler < cv::Mat, size_t >
+		class AdaptiveReorderingSampler : public Sampler
 		{
 		protected:
 			std::vector<std::tuple<double, size_t, size_t, double, double>> probabilities;
@@ -70,9 +70,12 @@ namespace gcransac
 			{
 				if (inlier_probabilities_.size() != container_->rows)
 				{
-					fprintf(stderr, "The number of correspondences (%d) and the number of provided probabilities (%d) do not match.",
-						container_->rows, 
-						inlier_probabilities_.size());
+					fprintf(
+						stderr,
+						"The number of correspondences (%d) and the number of "
+						"provided probabilities (%ld) do not match.",
+						container_->rows, inlier_probabilities_.size()
+					);
 					return;
 				}
 

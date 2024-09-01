@@ -129,7 +129,7 @@ namespace gcransac
 		// A sparse grid implementation. 
 		// Sparsity means that only those cells are instantiated that contain elements. 
 		template <size_t _DimensionNumber>
-		class GridNeighborhoodGraph : public NeighborhoodGraph<cv::Mat>
+		class GridNeighborhoodGraph : public NeighborhoodGraph
 		{
 		protected:
 			// The size of a cell along a particular dimension
@@ -164,14 +164,14 @@ namespace gcransac
 				const cv::Mat * const container_, // The pointer of the container consisting of the data points.
 				const std::vector<double> &cell_sizes_, // The sizes of the cells along each axis
 				const size_t &cell_number_along_all_axes_) : // The number of cells along the axes
-				cell_number_along_all_axes(cell_number_along_all_axes_),
+				NeighborhoodGraph(container_),
 				cell_sizes(cell_sizes_),
-				NeighborhoodGraph(container_)
+				cell_number_along_all_axes(cell_number_along_all_axes_)
 			{
 				// Checking if the dimension number of the graph and the points are the same. 
 				if (container_->cols != _DimensionNumber)
 				{
-					fprintf(stderr, "The data dimension (%d) does not match with the expected dimension (%d).\n", 
+					fprintf(stderr, "The data dimension (%d) does not match with the expected dimension (%ld).\n", 
 						container_->cols, _DimensionNumber);
 					return;
 				}

@@ -48,7 +48,7 @@ namespace gcransac
 	{
 		// Prosac sampler used for PROSAC implemented according to "cv::Matching with PROSAC
 		// - Progressive Sampling Consensus" by Chum and cv::Matas.
-		class ImportanceSampler : public Sampler < cv::Mat, size_t >
+		class ImportanceSampler : public Sampler
 		{
 		protected:
 			size_t sample_size,

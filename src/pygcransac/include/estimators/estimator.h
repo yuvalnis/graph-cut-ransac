@@ -36,75 +36,92 @@
 #include <vector>
 #include "GCoptimization.h" 
 
-namespace gcransac
+namespace gcransac::estimator
 {
-	namespace estimator
+// Templated class for estimating a model for RANSAC. This class is purely a
+// virtual class and should be implemented for the specific task that RANSAC is
+// being used for. Two methods must be implemented: estimateModel and residual. All
+// other methods are optional, but will likely enhance the quality of the RANSAC
+// output.
+template <class Solver>
+class Estimator
+{
+public:
+	using Model = typename Solver::Model;
+	using ResidualDimension = typename Solver::ResidualDimension;
+	using InlierContainerType = typename Solver::InlierContainerType;
+	using ResidualType = typename Solver::ResidualType;
+	using WeightType = typename Solver::WeightType;
+	using SampleSizeType = typename Solver::SampleSizeType;
+
+	virtual ~Estimator() {}
+
+	// Get the minimum number of samples needed to generate a model.
+	inline virtual const SampleSizeType& inlierLimit() const = 0;
+
+	// A flag deciding if the points can be weighted when the non-minimal fitting is applied 
+    inline virtual constexpr bool isWeightingApplicable() const { return true; }
+
+	inline virtual SampleSizeType sampleSize() const = 0;
+
+	// Given a set of data points, estimate the model. Users should implement this
+	// function appropriately for the task being solved. Returns true for
+	// successful model estimation (and outputs model), false for failed
+	// estimation. Typically, this is a minimal set, but it is not required to be.
+	virtual bool estimateModel(
+		const cv::Mat& data,
+		const InlierContainerType& inliers,
+		std::vector<Model>& model
+	) const = 0;
+
+	// Estimate a model from a non-minimal sampling of the data. E.g. for a line,
+	// use SVD on a set of points instead of constructing a line from two points.
+	// By default, this simply implements the minimal case.
+	// In case of weighted least-squares, the weights can be fed into the
+	// function.
+	virtual bool estimateModelNonminimal(
+		const cv::Mat& data,
+		const InlierContainerType& inliers,
+		std::vector<Model>& model,
+		const WeightType& weights = WeightType{}
+	) const = 0;
+
+	// Given a model and a data point, calculate the error. Users should implement
+	// this function appropriately for the task being solved.
+	inline virtual ResidualType residual(const cv::Mat& data, const Model& model) const = 0;
+
+	inline virtual ResidualType squaredResidual(const cv::Mat& data, const Model& model) const = 0;
+	
+	// A function to decide if the selected sample is degenerate or not
+	// before calculating the model parameters
+	inline virtual bool isValidSample(
+		const cv::Mat& data, // All data points
+		const InlierContainerType& inliers
+	) const // The indices of the selected points
 	{
-		// Templated class for estimating a model for RANSAC. This class is purely a
-		// virtual class and should be implemented for the specific task that RANSAC is
-		// being used for. Two methods must be implemented: estimateModel and residual. All
-		// other methods are optional, but will likely enhance the quality of the RANSAC
-		// output.
-		template <typename DatumType, typename ModelType, typename ResidualType = double> class Estimator
-		{
-		public:
-			typedef DatumType Datum;
-			typedef ModelType Model;
-
-			Estimator() {}
-			virtual ~Estimator() {}
-
-			// Get the minimum number of samples needed to generate a model.
-			OLGA_INLINE virtual size_t inlierLimit() const = 0;
-
-			// Given a set of data points, estimate the model. Users should implement this
-			// function appropriately for the task being solved. Returns true for
-			// successful model estimation (and outputs model), false for failed
-			// estimation. Typically, this is a minimal set, but it is not required to be.
-			OLGA_INLINE virtual bool estimateModel(const Datum& data,
-				const size_t *sample,
-				std::vector<Model>* model) const = 0;
-
-			// Estimate a model from a non-minimal sampling of the data. E.g. for a line,
-			// use SVD on a set of points instead of constructing a line from two points.
-			// By default, this simply implements the minimal case.
-			// In case of weighted least-squares, the weights can be fed into the
-			// function.
-			OLGA_INLINE virtual bool estimateModelNonminimal(const Datum& data,
-				const size_t *sample,
-				const size_t &sample_number,
-				std::vector<Model>* model,
-				const double *weights_ = nullptr) const = 0;
-
-			// Given a model and a data point, calculate the error. Users should implement
-			// this function appropriately for the task being solved.
-			OLGA_INLINE virtual ResidualType residual(const Datum& data, const Model& model) const = 0;
-			OLGA_INLINE virtual ResidualType squaredResidual(const Datum& data, const Model& model) const = 0;
-			
-			// A function to decide if the selected sample is degenerate or not
-			// before calculating the model parameters
-			OLGA_INLINE virtual bool isValidSample(
-				const cv::Mat& data, // All data points
-				const size_t *sample) const // The indices of the selected points
-			{
-				return true;
-			}
-
-			// Enable a quick check to see if the model is valid. This can be a geometric
-			// check or some other verification of the model structure.
-			OLGA_INLINE virtual bool isValidModel(const Model& model) const { return true; }
-
-			// Enable a quick check to see if the model is valid. This can be a geometric
-			// check or some other verification of the model structure.
-			OLGA_INLINE virtual bool isValidModel(Model& model,
-				const Datum& data,
-				const std::vector<size_t> &inliers,
-				const size_t *minimal_sample_,
-				const ResidualType threshold_,
-				bool &model_updated_) const
-			{
-				return true;
-			}
-		};
+		return true;
 	}
-}  // namespace gcransac
+
+	// Enable a quick check to see if the model is valid. This can be a geometric
+	// check or some other verification of the model structure.
+	inline virtual bool isValidModel(const Model& model) const
+	{
+		return true;
+	}
+
+	// Enable a quick check to see if the model is valid. This can be a geometric
+	// check or some other verification of the model structure.
+	inline virtual bool isValidModel(
+		Model& model,
+		const cv::Mat& data,
+		const InlierContainerType& inliers,
+		const InlierContainerType& minimal_sample,
+		const ResidualType threshold,
+		bool& model_updated
+	) const
+	{
+		return true;
+	}
+};
+
+}

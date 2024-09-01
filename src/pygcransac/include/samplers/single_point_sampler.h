@@ -45,7 +45,7 @@ namespace gcransac
 		// This sampler deterministically selects points one after another. 
 		// It acts like a quasi-random sampler: it partitions the point number into segments
 		// and selects the indices from the consecutive segments.
-		class SinglePointSampler : public Sampler < cv::Mat, size_t >
+		class SinglePointSampler : public Sampler
 		{
 		protected:
 			const size_t step_size,

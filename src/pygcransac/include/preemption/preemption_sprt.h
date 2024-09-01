@@ -34,21 +34,24 @@
 #pragma once
 
 #include "model.h"
+#include "scoring_functions/score.hpp"
 #include <opencv2/core.hpp>
 #include <Eigen/Eigen>
 #include <random>
 #include <algorithm>
 #include <iomanip>
 
-#define LOG_ETA_0 log(0.05)
-
 namespace gcransac
 {
 	namespace preemption
 	{
-		template <typename _ModelEstimator>
+		template <typename ModelEstimator>
 		class SPRTPreemptiveVerfication
 		{
+			public:
+			using Model = typename ModelEstimator::Model;
+			using ScoreType = Score<ModelEstimator::ResidualDimension::value>;
+
 		protected:
 			class SPRTHistory {
 			public:
@@ -101,12 +104,11 @@ namespace gcransac
 			// This function is called only once to calculate the exact model estimation time of 
 			// the current model on the current machine. It is required for SPRT to really
 			// speed up the verification procedure. 
-			void initialize(const cv::Mat &points_,
-				const _ModelEstimator &estimator_)
+			void initialize(const cv::Mat &points_, const ModelEstimator &estimator_)
 			{
-				size_t sample[_ModelEstimator::sampleSize()];
-				std::iota(sample, sample + _ModelEstimator::sampleSize(), 0);
-				for (size_t sampleIdx = 0; sampleIdx < _ModelEstimator::sampleSize(); ++sampleIdx)
+				size_t sample[estimator_.sampleSize()];
+				std::iota(sample, sample + estimator_.sampleSize(), 0);
+				for (size_t sampleIdx = 0; sampleIdx < estimator_.sampleSize(); ++sampleIdx)
 					sample[sampleIdx] = sampleIdx;
 
 				std::vector<Model> models;
@@ -125,13 +127,13 @@ namespace gcransac
 				if (models.size() > 0)
 				{
 					start = std::chrono::system_clock::now();
-					for (size_t sampleIdx = 0; sampleIdx < _ModelEstimator::sampleSize(); ++sampleIdx)
+					for (size_t sampleIdx = 0; sampleIdx < estimator_.sampleSize(); ++sampleIdx)
 						estimator_.residual(points_.row(sampleIdx), models[0]);
 					end = std::chrono::system_clock::now();
-					t_M = (elapsedSeconds.count() * 1000.0 / _ModelEstimator::sampleSize()) / t_M; // The time of estimating a model
+					t_M = (elapsedSeconds.count() * 1000.0 / estimator_.sampleSize()) / t_M; // The time of estimating a model
 				}
 
-				m_S = _ModelEstimator::maximumMinimalSolutions(); // The maximum number of solutions
+				m_S = estimator_.maximumMinimalSolutions(); // The maximum number of solutions
 
 				/*printf("Setting up SPRT test.\n");
 				printf("\tThe estimation of one models takes %f ms.\n", t_M);
@@ -139,13 +141,13 @@ namespace gcransac
 			}
 
 			SPRTPreemptiveVerfication(const cv::Mat &points_,
-				const _ModelEstimator &estimator_,
+				const ModelEstimator &estimator_,
 				const double &minimum_inlier_ratio_ = 0.01)
 			{
-				if (points_.rows < _ModelEstimator::sampleSize())
+				if (points_.rows < estimator_.sampleSize())
 				{
 					fprintf(stderr, "There are not enough points to initialize the SPRT test (%d < %d).\n",
-						points_.rows, _ModelEstimator::sampleSize());
+						points_.rows, estimator_.sampleSize());
 					return;
 				}
 
@@ -203,16 +205,16 @@ namespace gcransac
 			 *
 			 * Verifies model and returns model score.
 			 */
-			bool verifyModel(const gcransac::Model &model_,
-				const _ModelEstimator &estimator_, // The model estimator
+			bool verifyModel(const Model &model_,
+				const ModelEstimator &estimator_, // The model estimator
 				const double &threshold_,
 				const size_t &iteration_number_,
-				const Score &best_score_,
+				const ScoreType &best_score_,
 				const cv::Mat &points_,
 				const size_t *minimal_sample_,
 				const size_t sample_number_,
 				std::vector<size_t> &inliers_,
-				Score &score_,
+				ScoreType &score_,
 				const std::vector<const std::vector<size_t>*> *index_sets_ = nullptr)
 			{
 				inliers_.clear();
@@ -224,7 +226,7 @@ namespace gcransac
 
 				double lambda_new, lambda = 1;
 				size_t tested_point = 0, tested_inliers = 0;
-				score_ = Score();
+				score_ = ScoreType();
 
 				bool valid_model = true;
 				if (index_sets_ == nullptr)

@@ -34,20 +34,17 @@
 #pragma once
 
 #include <vector>
-#include <Eigen/Eigen>
-#include "../estimators/estimator.h"
 
 namespace gcransac
 {
 	namespace neighborhood
 	{
-		template <typename _DataContainer>
 		class NeighborhoodGraph
 		{
 		protected:
 			// The pointer of the container consisting of the data points from which
 			// the neighborhood graph is constructed.
-			const _DataContainer  * const container;
+			const cv::Mat  * const container;
 
 			// The number of neighbors, i.e., edges in the neighborhood graph.
 			size_t neighbor_number;
@@ -56,14 +53,11 @@ namespace gcransac
 			bool initialized;
 
 		public:
-			NeighborhoodGraph() : initialized(false), 
-				container(nullptr) 
-			{
-			}
+			NeighborhoodGraph() : container(nullptr), initialized(false) {}
 
-			NeighborhoodGraph(const _DataContainer * const container_) :
-				neighbor_number(0),
-				container(container_)
+			NeighborhoodGraph(const cv::Mat * const container_) :
+				container(container_),
+				neighbor_number(0)
 			{
 			}
 
@@ -73,7 +67,7 @@ namespace gcransac
 			}
 
 			// A function to initialize and create the neighbordhood graph.
-			virtual bool initialize(const _DataContainer * const container_) = 0;
+			virtual bool initialize(const cv::Mat * const container_) = 0;
 
 			// Returns the neighbors of the current point in the graph.
 			inline virtual const std::vector<size_t> &getNeighbors(size_t point_idx_) const = 0;

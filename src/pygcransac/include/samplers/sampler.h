@@ -34,56 +34,61 @@
 #pragma once
 
 #include <vector>
+#include <memory>
 
-namespace gcransac
+namespace gcransac::sampler
 {
-	namespace sampler
+// Purely virtual class used for the sampling consensus methods (e.g. Ransac,
+// Prosac, MLESac, etc.)
+class Sampler
+{
+public:
+
+	virtual ~Sampler() {}
+
+	virtual inline const std::string getName() const = 0;
+
+	virtual void reset() = 0;
+
+	virtual void update(
+		const size_t* const subset_,
+		const size_t& sample_size_,
+		const size_t& iteration_number_, // TODO remove - no child classes use this parameter in their implementation
+		const double& inlier_ratio_ // TODO remove - no child classes use this parameter in their implementation
+	)
 	{
-		// Purely virtual class used for the sampling consensus methods (e.g. Ransac,
-		// Prosac, MLESac, etc.)
-		template <class _DataContainer, class _IndexType>
-		class Sampler
-		{
-		protected:
-			// The pointer of the container consisting of the data points from which
-			// the neighborhood graph is constructed.
-			const _DataContainer * const container;
-
-			// A variable showing if the initialization was succesfull
-			bool initialized;
-
-		public:
-			explicit Sampler(const _DataContainer * const container_) :
-				container(container_),
-				initialized(false)
-			{}
-
-			virtual ~Sampler() {}
-
-			virtual const std::string getName() const = 0;
-
-			virtual void reset() = 0;
-
-			virtual void update(
-				const size_t* const subset_,
-				const size_t& sample_size_,
-				const size_t& iteration_number_,
-				const double& inlier_ratio_) = 0;
-
-			// Initializes any non-trivial variables and sets up sampler if
-			// necessary. Must be called before sample is called.
-			virtual bool initialize(const _DataContainer * const container_) = 0;
-
-			// Samples the input variable data and fills the std::vector subset with the
-			// samples.
-			OLGA_INLINE virtual bool sample(const std::vector<_IndexType> &pool_,
-				_IndexType * const subset_,
-				size_t sample_size_) = 0;
-
-			bool isInitialized() const
-			{
-				return initialized;
-			}
-		};
+		// do nothing
+		return;
 	}
+
+	// Samples the input variable data and fills the std::vector subset with the
+	// samples.
+	virtual bool sample(
+		const std::vector<size_t> &pool_,
+		size_t * const subset_,
+		size_t sample_size_
+	) = 0;
+
+	virtual bool isInitialized() const
+	{
+		return true;
+	}
+};
+
+// template <size_t N> 
+// class SamplerArray
+// {
+// private:
+
+// 	std::array<std::unique_ptr<Sampler>, N> samplers;
+
+// public:
+
+// 	inline void update() const
+// 	{
+// 		// right now supports only UniformSamplers which have an empty update method
+// 		return;
+// 	}
+// };
+
 }

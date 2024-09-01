@@ -47,7 +47,7 @@ namespace gcransac
 		// The paper in which the Progressive NAPSAC sampler is described is
 		// at https://arxiv.org/abs/1906.02295
 		template <size_t _DimensionNumber>
-		class ProgressiveNapsacSampler : public Sampler < cv::Mat, size_t >
+		class ProgressiveNapsacSampler : public Sampler
 		{
 		protected:
 			std::unique_ptr<utils::UniformRandomGenerator<size_t>> random_generator; // The random number generator
