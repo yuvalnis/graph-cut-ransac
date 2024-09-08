@@ -34,14 +34,12 @@ public:
 		const Eigen::Array<bool, Eigen::Dynamic, 1> comparison =
 			sqr_residuals.array() <= sqr_truncated_thresholds.array();
 
-		for (size_t i = 0; i < comparison.size(); i++)
+		for (size_t i = 0; i < NumInlierTypes::value; i++)
 		{
 			if (comparison(i))
 			{
 				inliers[i].emplace_back(point_idx);
-				auto& inlier_num = score.num_inliers_by_type(i);
-				inlier_num++;
-				auto& score_val = score.value_by_type(i);
+				score.increment_inlier_num(i);
 				// Increase the score.
 				// The original truncated quadratic loss is as follows: 
 				// score = 1 - residual^2 / threshold^2.
@@ -51,7 +49,7 @@ public:
 				// score * threshold^2 = threshold^2 - residual^2		->
 				// score * threshold^2 - threshold^2 = - residual^2
 				// This is faster to calculate and it is normalized back afterwards.
-				score_val -= sqr_residuals(i);
+				score.increment_value(i, -sqr_residuals(i));
 			}
 		}
 	}
@@ -62,7 +60,6 @@ public:
 		const ModelEstimator &estimator, // The model estimator
 		const ThresholdType& thresholds,
 		InlierContainerType& inliers, // The selected inliers
-		const ScoreType& best_score = ScoreType(), // The score of the current so-far-the-best model
 		const std::vector<const std::vector<size_t>*>* index_sets = nullptr // Index sets to be verified
 	) const
 	{
@@ -107,14 +104,15 @@ public:
 		for (size_t i = 0; i < NumInlierTypes::value; i++)
 		{
 			const auto& n_inliers = score.num_inliers_by_type(i);
-			if (n_inliers > 0)
+			if (n_inliers == 0)
 			{
-				auto& score_i = score.value_by_type(i);
-				score_i = (score_i / sqr_truncated_thresholds(i)) + n_inliers;
+				continue;
 			}
+			const auto normed_score = score.value_by_type(i) /
+									  sqr_truncated_thresholds(i);
+			const auto msac_score = normed_score + static_cast<double>(n_inliers);
+			score.reset_value(i, msac_score);
 		}
-
-		score.finalize();
 
 		return score;
 	}

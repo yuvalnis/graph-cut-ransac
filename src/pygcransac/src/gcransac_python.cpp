@@ -22,7 +22,7 @@ int findRectifyingHomographyScaleOnly_(
 	size_t min_iteration_number,
 	size_t max_iteration_number,
 	size_t max_local_optimization_number,
-	sampler::SamplerType sampler_type,
+	[[maybe_unused]] sampler::SamplerType sampler_type,
 	std::vector<bool>& inliers,	// output inlier boolean mask
 	std::vector<double>& homography	// output homography
 )
@@ -31,7 +31,6 @@ int findRectifyingHomographyScaleOnly_(
 	using ModelEstimator = utils::ScaleBasedRectifyingHomographyEstimator;
 
 	constexpr size_t kFeatureSize = 3;	// each SIFT feature contains a 2D-coordinate and scale
-	constexpr size_t kResidualDim = 1;
 
 	if (features.size() % kFeatureSize != 0)
 	{
@@ -103,7 +102,7 @@ int findRectifyingHomographyScaleOnly_(
 
 	inliers.resize(num_features, false);
 	const auto num_inliers = statistics.inliers.size();
-	for (auto pt_idx = 0; pt_idx < num_inliers; ++pt_idx) {
+	for (size_t pt_idx = 0; pt_idx < num_inliers; ++pt_idx) {
 		inliers[statistics.inliers[0][pt_idx]] = true;
 	}
 
@@ -119,7 +118,7 @@ int findRectifyingHomographySIFT_(
 	size_t min_iteration_number,
 	size_t max_iteration_number,
 	size_t max_local_optimization_number,
-	sampler::SamplerType sampler_type,
+	[[maybe_unused]] sampler::SamplerType sampler_type,
 	std::vector<bool>& scale_inliers, // output scale inlier boolean mask
 	std::vector<bool>& orientation_inliers,	// output orientation inlier boolean mask
 	std::vector<double>& homography, // output estimated homography
@@ -130,7 +129,6 @@ int findRectifyingHomographySIFT_(
 	using ModelEstimator = utils::SIFTBasedRectifyingHomographyEstimator;
 
 	constexpr size_t kFeatureSize = 4;
-	constexpr size_t kResidualDim = 2;
 	
 	if (features.empty() || features.size() % kFeatureSize != 0)
 	{

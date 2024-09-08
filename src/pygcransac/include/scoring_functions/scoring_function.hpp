@@ -30,7 +30,6 @@ public:
 		const Estimator &estimator, // The model estimator
 		const ThresholdType& thresholds,
 		InlierContainerType& inliers, // The selected inliers
-		const ScoreType& best_score = ScoreType(), // The score of the current so-far-the-best model
 		const std::vector<const std::vector<size_t>*>* index_sets = nullptr // Index sets to be verified
 	) const = 0;
 };

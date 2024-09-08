@@ -120,7 +120,7 @@ namespace gcransac
 
 			// Samples the input variable data and fills the std::vector subset with the
 			// samples.
-			OLGA_INLINE bool sample(const std::vector<size_t> &pool_,
+			bool sample(const std::vector<size_t> &pool_,
 				size_t * const subset_,
 				size_t sample_size_);
 		};
@@ -203,7 +203,7 @@ namespace gcransac
 		}
 
 		template <size_t _DimensionNumber>
-		OLGA_INLINE bool ProgressiveNapsacSampler<_DimensionNumber>::sample(
+		bool ProgressiveNapsacSampler<_DimensionNumber>::sample(
 			const std::vector<size_t> &pool_,
 			size_t * const subset_,
 			size_t sample_size_)

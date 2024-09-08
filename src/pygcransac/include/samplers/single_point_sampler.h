@@ -98,12 +98,12 @@ namespace gcransac
 
 			// Samples the input variable data and fills the std::vector subset with the
 			// samples.
-			OLGA_INLINE bool sample(const std::vector<size_t> &pool_,
+			bool sample(const std::vector<size_t> &pool_,
 				size_t * const subset_,
 				size_t sample_size_);
 		};
 
-		OLGA_INLINE bool SinglePointSampler::sample(
+		bool SinglePointSampler::sample(
 			const std::vector<size_t> &pool_,
 			size_t * const subset_,
 			size_t sample_size_)

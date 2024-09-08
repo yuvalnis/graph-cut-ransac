@@ -199,12 +199,12 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 	// this is the relative scale of the recitified features.
 	double alpha = 1.0;
 
-	void rectify(Eigen::Vector3d& p) const
+	inline void rectifyPoint(Eigen::Vector3d& p) const
 	{
 		p(2) = h7 * p(0) + h8 * p(1) + p(2);
-	}
+	} 
 
-	void unrectify(Eigen::Vector3d& p) const
+	inline void unrectifyPoint(Eigen::Vector3d& p) const
 	{
 		// negating h7 and h8 is equivalent to inverting the rectifying
 		// homography matrix in this case
@@ -221,9 +221,48 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 		return fmod(std::atan2(numer, denom), kTwoPI);
 	}
 
-	double rectifiedScale(const double& x, const double& y, const double& scale) const
+	double unrectifiedAngle(const double& x, const double& y, const double& angle) const
+	{
+		constexpr double kTwoPI = 2.0 * M_PI;
+		const auto c = std::cos(angle);
+   		const auto s = std::sin(angle);
+		// negating h7 and h8 is equivalent to inverting the rectifying
+		// homography matrix in this case
+		const auto numer = -(x * s - y * c) * h7 + s;
+		const auto denom = -(-x * s + y * c) * h8 + c;
+		return fmod(std::atan2(numer, denom), kTwoPI);
+	}
+
+	inline double rectifiedScale(const double& x, const double& y, const double& scale) const
 	{
 		return scale * std::pow(h7 * x + h8 * y + 1.0, 3.0);
+	}
+
+	inline double unrectifiedScale(const double& x, const double& y, const double& scale) const
+	{
+		// negating h7 and h8 is equivalent to inverting the rectifying
+		// homography matrix in this case
+		return scale * std::pow(-h7 * x - h8 * y + 1.0, 3.0);
+	}
+
+	void rectifyFeature(double& x, double& y, double& angle, double& scale) const
+	{
+		angle = rectifiedAngle(x, y, angle);
+		scale = rectifiedScale(x, y, scale);
+		Eigen::Vector3d point(x, y, 1.0);
+		rectifyPoint(point);
+		x = point(0) / point(2);
+		y = point(1) / point(2);
+	}
+
+	void unrectifyFeature(double& x, double& y, double& angle, double& scale) const
+	{
+		angle = unrectifiedAngle(x, y, angle);
+		scale = unrectifiedScale(x, y, scale);
+		Eigen::Vector3d point(x, y, 1.0);
+		unrectifyPoint(point);
+		x = point(0) / point(2);
+		y = point(1) / point(2);
 	}
 
 	Eigen::Matrix3d getHomography() const

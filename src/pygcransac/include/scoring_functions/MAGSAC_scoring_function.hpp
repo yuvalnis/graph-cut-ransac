@@ -11,7 +11,7 @@
 // public:
 
 // // Return the score of a model w.r.t. the data points and the threshold
-// OLGA_INLINE Score getScore(const cv::Mat& points_, // The input data points
+// Score getScore(const cv::Mat& points_, // The input data points
 //     Model& model_, // The current model parameters
 //     const _Estimator& estimator_, // The model estimator
 //     const double threshold_, // The inlier-outlier threshold

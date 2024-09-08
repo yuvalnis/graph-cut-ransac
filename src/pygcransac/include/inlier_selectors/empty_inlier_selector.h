@@ -56,12 +56,12 @@ public:
 
     // The function that runs the model-based inlier selector
     void run(
-        const cv::Mat& kCorrespondences_, // All point correspondences
-        const Model& kModel_, // The model parameters
-        const _NeighborhoodStructure& kNeighborhood_, // The neighborhood structure. This probably will be a GridNeighborhood currently.
-        const ResidualType& inlierOutlierThreshold_,
-        std::vector<const std::vector<size_t>*>& selectedCells_, // The indices of the points selected
-        size_t& pointNumber_
+        [[maybe_unused]] const cv::Mat& kCorrespondences_, // All point correspondences
+        [[maybe_unused]] const Model& kModel_, // The model parameters
+        [[maybe_unused]] const _NeighborhoodStructure& kNeighborhood_, // The neighborhood structure. This probably will be a GridNeighborhood currently.
+        [[maybe_unused]] const ResidualType& inlierOutlierThreshold_,
+        [[maybe_unused]] std::vector<const std::vector<size_t>*>& selectedCells_, // The indices of the points selected
+        [[maybe_unused]] size_t& pointNumber_
     )
     {
         

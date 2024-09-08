@@ -115,18 +115,18 @@ namespace gcransac
 
 			// Samples the input variable data and fills the std::vector subset with the
 			// samples.
-			OLGA_INLINE bool sample(const std::vector<size_t> &pool_,
+			bool sample(const std::vector<size_t> &pool_,
 				size_t * const subset_,
 				size_t sample_size_);
 
-			OLGA_INLINE void update(
+			void update(
 				const size_t* const subset_,
 				const size_t &sample_size_,
 				const size_t& iteration_number_,
 				const double &inlier_ratio_);
 		};
 
-		OLGA_INLINE void AdaptiveReorderingSampler::update(
+		void AdaptiveReorderingSampler::update(
 			const size_t* const subset_,
 			const size_t& sample_size_,
 			const size_t& iteration_number_,
@@ -154,7 +154,7 @@ namespace gcransac
 			}
 		}
 
-		OLGA_INLINE bool AdaptiveReorderingSampler::sample(
+		bool AdaptiveReorderingSampler::sample(
 			const std::vector<size_t>& pool_,
 			size_t* const subset_,
 			size_t sample_size_)

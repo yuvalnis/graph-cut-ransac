@@ -37,7 +37,8 @@
 #include <sstream>
 #include <algorithm>
 #include <random>
-#include "GCoptimization.h"
+#include "energy.h"
+#include "graph.h"
 #include "model.h"
 #include "settings.h"
 #include "statistics.h"
@@ -99,8 +100,6 @@ public:
 	GCRANSAC() :
 		settings(ResidualDimension),
 		time_limit(std::numeric_limits<double>::max()),
-		truncated_thresholds(1.5 * settings.threshold),
-		squared_truncated_thresholds(truncated_thresholds * truncated_thresholds),
 		scoring_function(std::make_unique<_ScoringFunction>())
 		
 	{}
@@ -202,6 +201,10 @@ public:
 		std::chrono::time_point<std::chrono::system_clock> start, end;
 		std::chrono::duration<double> elapsed_seconds;
 
+		// computed truncated thresholds
+		truncated_thresholds = 1.5 * settings.threshold;
+		squared_truncated_thresholds = truncated_thresholds * truncated_thresholds;
+
 		statistics.main_sampler_name = "Uniform Sampler";
 		statistics.local_optimizer_sampler_name = "Uniform Sampler";
 		statistics.iteration_number = 0;
@@ -254,9 +257,11 @@ public:
 		InlierContainerType pool{};
 		for (size_t i = 0; i < ResidualDimension; i++)
 		{
+			auto& pool_i = pool[i];
+			pool_i.reserve(point_number);
 			for (size_t j = 0; j < point_number; j++)
 			{
-				pool[i][j] = j;
+				pool_i.push_back(j);
 			}
 		}
 
@@ -419,7 +424,6 @@ public:
 							model_estimator, // The estimator 
 							settings.threshold, // The current threshold
 							temp_inner_inliers[inlier_container_offset], // The current inlier set
-							so_far_the_best_score, // The score of the current so-far-the-best model
 							&preselected_index_sets // The point index set consisting of the pre-selected points' indices
 						);
 					else // Otherwise, run on all points
@@ -428,8 +432,7 @@ public:
 							model, // The current model parameters
 							model_estimator, // The estimator 
 							settings.threshold, // The current threshold
-							temp_inner_inliers[inlier_container_offset], // The current inlier set
-							so_far_the_best_score // The score of the current so-far-the-best model
+							temp_inner_inliers[inlier_container_offset] // The current inlier set
 						);
 				}
 
@@ -452,8 +455,7 @@ public:
 							model, // The current model parameters
 							model_estimator, // The estimator 
 							settings.threshold, // The current threshold
-							temp_inner_inliers[inlier_container_offset], // The current inlier set
-							so_far_the_best_score // The score of the current so-far-the-best model
+							temp_inner_inliers[inlier_container_offset] // The current inlier set
 						);
 					}
 
@@ -672,7 +674,7 @@ public:
 			preemptive_verification, fast_inlier_selector);
 	}
 
-	OLGA_INLINE void setFPS(double fps_)
+	void setFPS(double fps_)
 	{
 		settings.desired_fps = fps_;
 		time_limit = 1.0 / fps_;
@@ -692,7 +694,6 @@ public:
 
 protected:
 	double time_limit; // The desired time limit
-	std::vector<std::vector<cv::DMatch>> neighbours; // The neighborhood structure
 	utils::RANSACStatistics<ResidualDimension> statistics; // RANSAC statistics
 	size_t point_number; // The point number
 	Eigen::ArrayXd truncated_thresholds; // 3 / 2 * threshold_
@@ -729,55 +730,55 @@ protected:
 	// Returns a labeling w.r.t. the current model and point set
 	void labeling(const cv::Mat &points_, // The input data points
 		size_t neighbor_number_, // The neighbor number in the graph
-		const std::vector<std::vector<cv::DMatch>> &neighbors_, // The neighborhood
 		const Model &model_, // The current model_
 		const _ModelEstimator& model_estimator, // The model estimator
 		double lambda_, // The weight for the spatial coherence term
-		const double& threshold_, // The threshold for the inlier-outlier decision
-		std::vector<size_t> &inliers, // The resulting inlier set
-		double &energy_ // The resulting energy
+		std::vector<size_t> &inliers // The resulting inlier set
 	)
 	{
 		static_assert(ResidualDimension == 1, "Labeling function should not be called when multiple residual types exist!");
 		inliers.reserve(points_.rows);
-		const int &point_number = points_.rows;
+		const auto point_number = static_cast<size_t>(points_.rows);
 
 		// Initializing the problem graph for the graph-cut algorithm.
 		Energy<double, double, double> *problem_graph =
-			new Energy<double, double, double>(point_number, // The number of vertices
-				neighbor_number_, // The number of edges
-				NULL);
+			new Energy<double, double, double>(point_number, neighbor_number_, NULL);
 
 		// Add a vertex for each point
-		for (auto i = 0; i < point_number; ++i)
+		for (size_t i = 0; i < point_number; ++i)
+		{
 			problem_graph->add_node();
+		}
 
 		// The distance and energy for each point
 		std::vector<double> distance_per_threshold;
 		distance_per_threshold.reserve(point_number);
-		double tmp_energy;
-		// TODO Gaussian kernel should be multivariate now. What is the 9/4 factor for?
-		const double squared_truncated_threshold = (9.0 / 4.0) * threshold_ * threshold_;
-		const double one_minus_lambda = 1.0 - lambda_;
+		const auto& sqr_truncated_thresh = squared_truncated_thresholds(0);
+		const auto one_minus_lambda = 1.0 - lambda_;
 
 		// Estimate the vertex capacities
 		for (size_t i = 0; i < point_number; ++i)
 		{
 			// Calculating the point-to-model squared residual
-			double tmp_squared_distance = model_estimator.squaredResidual(
+			double sqr_residual = model_estimator.squaredResidual(
 				points_.row(i), model_
 			)[0];
 			// Storing the residual divided by the squared threshold
-			distance_per_threshold.emplace_back(
-				std::clamp(tmp_squared_distance / squared_truncated_threshold, 0.0, 1.0));
+			const auto& quad_cost = distance_per_threshold.emplace_back(
+				std::clamp(sqr_residual / sqr_truncated_thresh, 0.0, 1.0)
+			);
 			// Calculating the implied unary energy
-			tmp_energy = 1 - distance_per_threshold.back();
+			const auto energy = 1.0 - quad_cost;
 
 			// Adding the unary energy to the graph
-			if (tmp_squared_distance <= squared_truncated_threshold)
-				problem_graph->add_term1(i, one_minus_lambda * tmp_energy, 0);
-			else 
-				problem_graph->add_term1(i, 0, one_minus_lambda * (1 - tmp_energy));
+			if (sqr_residual <= sqr_truncated_thresh)
+			{
+				problem_graph->add_term1(i, one_minus_lambda * energy, 0.0);
+			}
+			else
+			{
+				problem_graph->add_term1(i, 0.0, one_minus_lambda * (1.0 - energy));
+			}
 		}
 
 		std::vector<std::vector<int>> used_edges(point_number, std::vector<int>(point_number, 0));
@@ -788,7 +789,7 @@ protected:
 			double e00, e11 = 0; // Unused: e01 = 1.0, e10 = 1.0,
 
 			// Iterate through all points and set their edges
-			for (auto point_idx = 0; point_idx < point_number; ++point_idx)
+			for (size_t point_idx = 0; point_idx < point_number; ++point_idx)
 			{
 				energy1 = distance_per_threshold[point_idx]; // Truncated quadratic cost
 
@@ -893,9 +894,11 @@ protected:
 				// TODO this is for non-scalar residuals and thresholds.
 				// Right now this works only when lambda_ = 0.
 				using namespace Eigen;
-				for (auto point_idx = 0; point_idx < n_points; point_idx++)
+				for (size_t point_idx = 0; point_idx < n_points; point_idx++)
 				{
-					const auto sqr_residuals = model_estimator.squaredResidual(points_.row(point_idx), best_model);
+					const auto sqr_residuals = model_estimator.squaredResidual(
+						points_.row(point_idx), best_model
+					);
 					Array<bool, ResidualDimension, 1> comparison = sqr_residuals <= squared_truncated_thresholds;
 					// construct weights matrix such that inliers only contribute
 					// constraints for the residuals below the corresponding
@@ -916,17 +919,13 @@ protected:
 			}
 			else
 			{
-				double energy{0};
 				labeling(
 					points_, // The input points
 					statistics.neighbor_number, // The number of neighbors, i.e. the edge number of the graph 
-					neighbours, // The neighborhood graph
 					best_model, // The best model parameters
 					model_estimator, // The model estimator
 					settings.spatial_coherence_weight, // The weight of the spatial coherence term
-					settings.threshold(0), // The inlier-outlier threshold
-					inliers[0], // The selected inliers
-					energy // The energy after the procedure
+					inliers[0] // The selected inliers
 				);
 				sample_size[0] = inliers[0].size();
 			}
@@ -944,7 +943,7 @@ protected:
 			}
 
 			// Run an inner RANSAC on the inliers coming from the graph-cut algorithm
-			for (auto trial = 0; trial < trial_number_; ++trial)
+			for (size_t trial = 0; trial < trial_number_; ++trial)
 			{
 				// Reset the model vector
 				models.clear();
@@ -994,7 +993,7 @@ protected:
 					// Calculate the score of the current model
 					ScoreType score = scoring_function->getScore(
 						points_, model, model_estimator, settings.threshold,
-						tmp_inliers, max_score
+						tmp_inliers
 					);
 
 					// If this model is better than the previous best, update.

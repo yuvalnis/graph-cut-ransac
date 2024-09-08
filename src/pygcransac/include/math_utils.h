@@ -47,42 +47,54 @@ namespace gcransac
 			Eigen::Matrix<double, _Size, _Size + 1>& matrix_, // The matrix to which the elimination is applied
 			Eigen::Matrix<double, _Size, 1>& result_) // The resulting null-space
 		{
-			int i, j, k;
-			double temp;
+			static_assert(_Size > 0, "Template argument _Size must be non-zero.");
 
-			//Pivotisation
-			for (i = 0; i < _Size; i++)                    
-				for (k = i + 1; k < _Size; k++)
-					if (abs(matrix_(i, i)) < abs(matrix_(k, i)))
-						for (j = 0; j <= _Size; j++)
-						{
-							temp = matrix_(i, j);
-							matrix_(i, j) = matrix_(k, j);
-							matrix_(k, j) = temp;
-						}
-
-			//loop to perform the gauss elimination
-			for (i = 0; i < _Size - 1; i++)            
-				for (k = i + 1; k < _Size; k++)
+			// Pivotisation
+			for (size_t i = 0; i < _Size; i++)
+			{
+				for (size_t k = i + 1; k < _Size; k++)
 				{
-					double temp = matrix_(k, i) / matrix_(i, i);
-					for (j = 0; j <= _Size; j++)
-						// make the elements below the pivot elements equal to zero or elimnate the variables
-						matrix_(k, j) = matrix_(k, j) - temp * matrix_(i, j);    
+					if (abs(matrix_(i, i)) < abs(matrix_(k, i)))
+					{
+						for (size_t j = 0; j <= _Size; j++)
+						{
+							std::swap(matrix_(i, j), matrix_(k, j));
+						}
+					}
 				}
+			}
 
-			//back-substitution
-			for (i = _Size - 1; i >= 0; i--)                
+			// loop to perform the gauss elimination
+			for (size_t i = 0; i < _Size - 1; i++)
+			{         
+				for (size_t k = i + 1; k < _Size; k++)
+				{
+					const double temp = matrix_(k, i) / matrix_(i, i);
+					for (size_t j = 0; j <= _Size; j++)
+					{
+						// make the elements below the pivot elements equal to zero or elimnate the variables
+						matrix_(k, j) = matrix_(k, j) - temp * matrix_(i, j);
+					}
+				}
+			}
+
+			// back-substitution
+			for (size_t i = 0; i < _Size; i++)                
 			{                       
 				// result_ is an array whose values correspond to the values of x,y,z..
-				result_(i) = matrix_(i, _Size);                
+				const auto row_idx = _Size - 1 - i;
+				result_(row_idx) = matrix_(row_idx, _Size);                
 				//make the variable to be calculated equal to the rhs of the last equation
-				for (j = i + 1; j < _Size; j++)
-					if (j != i)            
+				for (size_t col_idx = row_idx + 1; col_idx < _Size; col_idx++)
+				{
+					if (col_idx != row_idx)
+					{
 						//then subtract all the lhs values except the coefficient of the variable whose value is being calculated
-						result_(i) = result_(i) - matrix_(i, j) * result_(j);
+						result_(row_idx) = result_(row_idx) - matrix_(row_idx, col_idx) * result_(col_idx);
+					}
+				}
 				//now finally divide the rhs by the coefficient of the variable to be calculated
-				result_(i) = result_(i) / matrix_(i, i);            
+				result_(row_idx) = result_(row_idx) / matrix_(row_idx, row_idx);
 			}
 		}
 		

@@ -95,13 +95,13 @@ namespace gcransac
 
 			// Samples the input variable data and fills the std::vector subset with the
 			// samples.
-			OLGA_INLINE bool sample(const std::vector<size_t> &pool_,
+			bool sample(const std::vector<size_t> &pool_,
 				size_t * const subset_,
 				size_t sample_size_);
 		};
 
 		template<typename _NeighborhoodGraph>
-		OLGA_INLINE bool NapsacSampler<_NeighborhoodGraph>::sample(
+		bool NapsacSampler<_NeighborhoodGraph>::sample(
 			const std::vector<size_t> &pool_,
 			size_t * const subset_,
 			size_t sample_size_)

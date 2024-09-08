@@ -24,7 +24,7 @@ public:
     ~RectifyingHomographyThreeSIFTSolver() {}
 
     // The minimum number of points required for the estimation
-    inline std::array<size_t, 1> sampleSize() const override { return {3}; }
+    inline std::array<size_t, 1> sampleSize() const { return {3}; }
 
     // Estimate the model parameters from the given point sample
     // using weighted fitting if possible.
@@ -331,6 +331,7 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     // compute normalized features - normalizing is relevant only for coordinates
     // and scale as the scaling of feature positions about the origin is isotropic
     auto* norm_features_ptr = reinterpret_cast<double*>(normalized_features.data);
+    const auto n_cols = static_cast<size_t>(normalized_features.cols);
     for (size_t i = 0; i < inliers.size(); i++)
     {
         const auto* feature = get_inlier(i);
@@ -341,14 +342,14 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
         normalizing_transform.normalize(norm_x, norm_y);
         normalizing_transform.normalizeScale(norm_scale);
 
-        norm_features_ptr[i * normalized_features.cols + x_pos] = norm_x;
-        norm_features_ptr[i * normalized_features.cols + y_pos] = norm_y;
-        norm_features_ptr[i * normalized_features.cols + s_pos] = norm_scale;
+        norm_features_ptr[i * n_cols + x_pos] = norm_x;
+        norm_features_ptr[i * n_cols + y_pos] = norm_y;
+        norm_features_ptr[i * n_cols + s_pos] = norm_scale;
         // ensures that if the dimension of the features is larger
         // than 3, then the normalization will still succeed.
-        for (size_t j = feature_size; j < normalized_features.cols; j++)
+        for (size_t j = feature_size; j < n_cols; j++)
         {
-			norm_features_ptr[i * normalized_features.cols + j] = feature[j];
+			norm_features_ptr[i * n_cols + j] = feature[j];
         }
     }
 

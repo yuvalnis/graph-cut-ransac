@@ -119,7 +119,7 @@ namespace gcransac
 			// samples.
 			// NOTE: This assumes that data is in sorted order by quality where data[i] is
 			// of higher quality than data[j] for all i < j.
-			OLGA_INLINE bool sample(const std::vector<size_t> &pool_,
+			bool sample(const std::vector<size_t> &pool_,
 				size_t * const subset_,
 				size_t sample_size_)
 			{

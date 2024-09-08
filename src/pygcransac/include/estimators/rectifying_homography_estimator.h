@@ -8,6 +8,7 @@
 #include <vector>
 #include <set>
 #include <numeric>
+#include <unordered_map>
 #include <Eigen/Eigen>
 #include "estimator.h"
 #include "model.h"
@@ -92,7 +93,7 @@ public:
     }
 
     // The size of a minimal sample_ required for the estimation
-    OLGA_INLINE static constexpr size_t maximumMinimalSolutions()
+    inline static constexpr size_t maximumMinimalSolutions()
     {
         return Solver::maximumSolutions();
     }
@@ -116,7 +117,7 @@ public:
 	}
 
     // Estimating the model from a minimal sample
-    OLGA_INLINE bool estimateModel(
+    inline bool estimateModel(
         const cv::Mat& data,
 		const InlierContainerType& inliers,
 		std::vector<Model>& models
@@ -125,8 +126,39 @@ public:
         return solver->estimateModel(data, inliers, models);
     }
 
+    static void computeNormalizedDataInliers(
+        const InlierContainerType& inliers,
+        InlierContainerType& inliers_of_normed_data,
+        std::vector<size_t>& unique_indices_vector
+    )
+    {
+        std::set<int> unique_indices;
+        std::unordered_map<int, int> index_map;  // Maps old indices to new indices
+        // Collect all unique indices from inliers
+        for (const auto& inlier_list : inliers)
+        {
+            unique_indices.insert(inlier_list.begin(), inlier_list.end());
+        }
+        // Convert the set to a vector to maintain sorted order
+        unique_indices_vector.assign(unique_indices.begin(), unique_indices.end());
+        // Populate normed_data and create the index map
+        size_t new_index = 0;
+        for (const auto& idx : unique_indices) {
+            index_map[idx] = new_index;
+            new_index++;
+        }
+        // Create the new inliers_of_normed_data
+        for (size_t i = 0; i < ResidualDimension::value; i++)
+        {
+            for (const auto& idx : inliers[i])
+            {
+                inliers_of_normed_data[i].push_back(index_map[idx]);
+            }
+        }
+    }
+
     // Estimating the model from a non-minimal sample
-    OLGA_INLINE bool estimateModelNonminimal(
+    bool estimateModelNonminimal(
         const cv::Mat& data,
 		const InlierContainerType& inliers,
 		std::vector<Model>& models,
@@ -142,12 +174,11 @@ public:
         }
         // since all data types are joined in the same data set, we compute
         // the indices which are inliers in any of the sub-types.
-        std::set<size_t> union_set;
-        for (const auto& inlier_set : inliers)
-        {
-            union_set.insert(inlier_set.begin(), inlier_set.end());
-        }
-        std::vector<size_t> inlier_union(union_set.begin(), union_set.end());
+        std::vector<size_t> inlier_union{};
+        InlierContainerType inliers_of_normed_data{};
+        computeNormalizedDataInliers(
+            inliers, inliers_of_normed_data, inlier_union
+        );
         // normalize features
         cv::Mat normalized_features(
             inlier_union.size(), data.cols, data.type()
@@ -170,7 +201,7 @@ public:
         // sample_ = nullptr because normalized features and wieights are now
         // made up only of inlier features and weights.
         success = solver->estimateModel(
-            normalized_features, InlierContainerType{}, models, inlier_weights
+            normalized_features, inliers_of_normed_data, models, inlier_weights
         );
         if (!success)
         {

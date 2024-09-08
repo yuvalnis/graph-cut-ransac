@@ -43,7 +43,9 @@ public:
     using Model = typename _Estimator::Model;
     using ResidualType = typename _Estimator::ResidualType;
 
-    explicit AbstractInlierSelector(const _NeighborhoodStructure *kNeighborhoodGraph_)
+    explicit AbstractInlierSelector(
+        [[maybe_unused]] const _NeighborhoodStructure *kNeighborhoodGraph_
+    )
     {
 
     }

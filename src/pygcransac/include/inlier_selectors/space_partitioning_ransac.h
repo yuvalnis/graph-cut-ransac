@@ -157,7 +157,7 @@
 
 //         template <typename _Estimator,
 //             typename _NeighborhoodStructure>
-//             OLGA_INLINE void SpacePartitioningRANSAC<_Estimator, _NeighborhoodStructure>::runRigidTransformation(
+//             void SpacePartitioningRANSAC<_Estimator, _NeighborhoodStructure>::runRigidTransformation(
 //                 const cv::Mat& kCorrespondences_,
 //                 const gcransac::Model& kModel_,
 //                 const _NeighborhoodStructure& kNeighborhood_,
@@ -338,7 +338,7 @@
 
 //         template <typename _Estimator,
 //             typename _NeighborhoodStructure>
-//             OLGA_INLINE void SpacePartitioningRANSAC<_Estimator, _NeighborhoodStructure>::runHomography(
+//             void SpacePartitioningRANSAC<_Estimator, _NeighborhoodStructure>::runHomography(
 //                 const cv::Mat& kCorrespondences_,
 //                 const gcransac::Model& kModel_,
 //                 const _NeighborhoodStructure& kNeighborhood_,
