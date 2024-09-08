@@ -188,6 +188,26 @@ struct NormalizingTransform
 	{
 		scale /= s;
 	}
+
+	// (de-)normalizing methods for SIFT features
+
+	void normalizeFeature(double& x, double& y, double& scale) const
+	{
+		normalizeScale(scale);
+		Eigen::Vector3d point(x, y, 1.0);
+		normalize(point);
+		x = point(0) / point(2);
+		y = point(1) / point(2);
+	}
+
+	void denormalizeFeature(double& x, double& y, double& scale) const
+	{
+		denormalizeScale(scale);
+		Eigen::Vector3d point(x, y, 1.0);
+		denormalize(point);
+		x = point(0) / point(2);
+		y = point(1) / point(2);
+	}
 };
 
 struct ScaleBasedRectifyingHomography : public NormalizingTransform

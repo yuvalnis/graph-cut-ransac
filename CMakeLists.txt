@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.8)
 project(GraphCutRANSAC LANGUAGES CXX)
 
 # indicate if OPENMP should be enabled
-option(CREATE_SAMPLE_PROJECT "Create the Sample Project" ON)
+option(CREATE_SAMPLE_PROJECT "Create the Sample Project" OFF)
+option(TEST_THREE_SIFT_SCALE_ONLY "Test Three SIFT Scale Only" OFF)
+option(TEST_TWO_SIFT "Test Two SIFT" OFF)
+option(TEST_NON_ID_TWO_SIFT "Test Non Identity TWO SIFT" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,13 +28,13 @@ option(USE_OPENMP "Use OPENMP" ON)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
 endif (OPENMP_FOUND)
 
-SET (CMAKE_BUILD_TYPE "RELEASE")
+# SET(CMAKE_BUILD_TYPE "DEBUG")
 
 IF(CMAKE_COMPILER_IS_GNUCXX)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-strict-aliasing")
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra -Wno-write-strings")
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated -ansi")
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ftree-vectorize -funroll-loops")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -ftree-vectorize -funroll-loops")
 ENDIF(CMAKE_COMPILER_IS_GNUCXX)
 
 find_package(Eigen3 REQUIRED)
@@ -93,6 +96,69 @@ if (CREATE_SAMPLE_PROJECT)
 
 	add_dependencies(SampleProject ${PROJECT_NAME})
 endif (CREATE_SAMPLE_PROJECT)
+
+if (TEST_THREE_SIFT_SCALE_ONLY)
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
+
+	add_executable(test_three_sift_scale_only
+		examples/test_three_sift_scale_only.cpp)
+		
+	target_link_libraries (test_three_sift_scale_only 
+		Eigen3::Eigen)
+		
+	target_link_libraries(test_three_sift_scale_only 
+		${OpenCV_LIBS}
+	)
+
+	target_link_libraries(test_three_sift_scale_only 
+		debug 
+		${PROJECT_NAME}
+	)
+
+	add_dependencies(test_three_sift_scale_only ${PROJECT_NAME})
+endif()
+
+if (TEST_TWO_SIFT)
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
+
+	add_executable(test_two_sift
+		examples/test_two_sift.cpp)
+		
+	target_link_libraries (test_two_sift 
+		Eigen3::Eigen)
+		
+	target_link_libraries(test_two_sift 
+		${OpenCV_LIBS}
+	)
+
+	target_link_libraries(test_two_sift 
+		debug 
+		${PROJECT_NAME}
+	)
+
+	add_dependencies(test_two_sift ${PROJECT_NAME})
+endif()
+
+if (TEST_NON_ID_TWO_SIFT)
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
+
+	add_executable(test_non_identity_homography_two_sift
+		examples/test_non_identity_homography_two_sift.cpp)
+		
+	target_link_libraries (test_non_identity_homography_two_sift 
+		Eigen3::Eigen)
+		
+	target_link_libraries(test_non_identity_homography_two_sift 
+		${OpenCV_LIBS}
+	)
+
+	target_link_libraries(test_non_identity_homography_two_sift 
+		debug 
+		${PROJECT_NAME}
+	)
+
+	add_dependencies(test_non_identity_homography_two_sift ${PROJECT_NAME})
+endif()
 
 
 
