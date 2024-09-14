@@ -505,8 +505,8 @@ public:
 					so_far_the_best_model, // Best model parameters
 					so_far_the_best_score, // Best model score
 					model_estimator, // Estimator
-					settings.max_local_optimization_number); // Maximum local optimization steps
-
+					settings.max_local_optimization_number // Maximum local optimization steps
+				);
 				// Update the maximum number of iterations variable
 				max_iteration = getIterationNumber(
 					so_far_the_best_score.inlier_num_array(), // The current inlier number
@@ -580,7 +580,8 @@ public:
 				model_estimator, // The model estimator
 				settings.threshold, // The inlier-outlier threshold
 				temp_inner_inliers[inlier_container_offset], // The resulting inlier set
-				model); // The estimated model
+				model // The estimated model
+			);
 
 			if (success)
 			{
@@ -696,8 +697,8 @@ protected:
 	double time_limit; // The desired time limit
 	utils::RANSACStatistics<ResidualDimension> statistics; // RANSAC statistics
 	size_t point_number; // The point number
-	Eigen::ArrayXd truncated_thresholds; // 3 / 2 * threshold_
-	Eigen::ArrayXd squared_truncated_thresholds; // 9 / 4 * threshold_^2
+	ResidualType truncated_thresholds; // 3 / 2 * threshold_
+	ResidualType squared_truncated_thresholds; // 9 / 4 * threshold_^2
 	int step_size; // Step size per processes
 	double log_probability; // The logarithm of 1 - confidence
 	const _NeighborhoodGraph *neighborhood_graph;
@@ -1080,7 +1081,7 @@ protected:
 	bool iteratedLeastSquaresFitting(
 		const cv::Mat& points,
 		const _ModelEstimator& model_estimator,
-		const Eigen::ArrayXd& thresholds,
+		const ResidualType& thresholds,
 		InlierContainerType& inliers,
 		Model& current_model
 	)
