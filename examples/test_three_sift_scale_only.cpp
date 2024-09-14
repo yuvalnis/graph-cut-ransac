@@ -14,7 +14,7 @@
 #include "estimators/rectifying_homography_estimator.h"
 #include "inlier_selectors/empty_inlier_selector.h"
 #include "preemption/preemption_empty.h"
-#include "estimators/solver_rectifying_homography_three_sift.h"
+#include "estimators/solver_rectifying_homography_three_sift.hpp"
 
 using namespace gcransac;
 
