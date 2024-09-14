@@ -67,7 +67,7 @@
 // #include "estimators/solver_homography_bundle_adjustment.h"
 // #include "estimators/solver_radial_homography_5pc.h"
 // #include "estimators/solver_radial_homography_6pc.h"
-#include "estimators/solver_rectifying_homography_three_sift.h"
+#include "estimators/solver_rectifying_homography_three_sift.hpp"
 #include "estimators/solver_rectifying_homography_two_sift.hpp"
 
 namespace gcransac
