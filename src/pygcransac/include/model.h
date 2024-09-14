@@ -206,7 +206,7 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 
 	inline void unrectifyPoint(Eigen::Vector3d& p) const
 	{
-		// negating h7 and h8 is equivalent to inverting the rectifying
+		// negating h7 and h8 is equivalent to inverting the warping
 		// homography matrix in this case
 		p(2) = -h7 * p(0) - h8 * p(1) + p(2);
 	}
@@ -214,22 +214,22 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 	double rectifiedAngle(const double& x, const double& y, const double& angle) const
 	{
 		constexpr double kTwoPI = 2.0 * M_PI;
-		const auto c = std::cos(angle);
-   		const auto s = std::sin(angle);
-		const auto numer = (x * s - y * c) * h7 + s;
-		const auto denom = (-x * s + y * c) * h8 + c;
+		const auto ct = std::cos(angle);
+   		const auto st = std::sin(angle);
+		const auto numer = (x * st - y * ct) * h7 + st;
+		const auto denom = (-x * st + y * ct) * h8 + ct;
 		return fmod(std::atan2(numer, denom), kTwoPI);
 	}
 
 	double unrectifiedAngle(const double& x, const double& y, const double& angle) const
 	{
 		constexpr double kTwoPI = 2.0 * M_PI;
-		const auto c = std::cos(angle);
-   		const auto s = std::sin(angle);
-		// negating h7 and h8 is equivalent to inverting the rectifying
+		const auto ct = std::cos(angle);
+   		const auto st = std::sin(angle);
+		// negating h7 and h8 is equivalent to inverting the warping
 		// homography matrix in this case
-		const auto numer = -(x * s - y * c) * h7 + s;
-		const auto denom = -(-x * s + y * c) * h8 + c;
+		const auto numer = (x * st - y * ct) * (-h7) + st;
+		const auto denom = (-x * st + y * ct) * (-h8) + ct;
 		return fmod(std::atan2(numer, denom), kTwoPI);
 	}
 
@@ -240,7 +240,7 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 
 	inline double unrectifiedScale(const double& x, const double& y, const double& scale) const
 	{
-		// negating h7 and h8 is equivalent to inverting the rectifying
+		// negating h7 and h8 is equivalent to inverting the warping
 		// homography matrix in this case
 		return scale * std::pow(-h7 * x - h8 * y + 1.0, 3.0);
 	}
