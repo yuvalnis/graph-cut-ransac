@@ -129,7 +129,7 @@ int main(int argc, char* argv[])
     }
 	std::cout << std::endl;
 
-    std::vector<bool> scale_inliers(num_squares * num_squares);
+    std::vector<bool> inliers(num_squares * num_squares);
 	std::vector<double> weights(num_squares * num_squares, 1.0);
     std::vector<double> homography(9);
 
@@ -172,13 +172,7 @@ int main(int argc, char* argv[])
 		ModelEstimator, NeighborhoodGraph
 	> inlier_selector(neighborhood_graph.get());
 
-	GCRANSAC<
-		ModelEstimator,
-		NeighborhoodGraph,
-		MSACScoringFunction<ModelEstimator>,
-		preemption::EmptyPreemptiveVerfication<ModelEstimator>,
-		inlier_selector::EmptyInlierSelector<ModelEstimator, NeighborhoodGraph>
-	> gcransac;
+	GCRANSAC<ModelEstimator, NeighborhoodGraph> gcransac;
 	gcransac.settings.threshold(0) = scale_residual_thresh;
 	gcransac.settings.do_local_optimization = true; 
 	gcransac.settings.spatial_coherence_weight = spatial_coherence_weight;
@@ -204,10 +198,10 @@ int main(int argc, char* argv[])
 		}	
 	}
 	// create a boolean mask of the scale inliers
-    scale_inliers.resize(num_features, false);
-	const auto num_scale_inliers = statistics.inliers[0].size();
-	for (size_t pt_idx = 0; pt_idx < num_scale_inliers; ++pt_idx) {
-		scale_inliers[statistics.inliers[0][pt_idx]] = true;
+    inliers.resize(num_features, false);
+	const auto num_inliers = statistics.inliers[0].size();
+	for (size_t pt_idx = 0; pt_idx < num_inliers; ++pt_idx) {
+		inliers[statistics.inliers[0][pt_idx]] = true;
 	}
     // end of block of code which goes in gcransac_python.cpp
 	H /= H(2,2);
@@ -216,7 +210,7 @@ int main(int argc, char* argv[])
 			  << "\nx0: " << model.x0 << ", y0: " << model.y0 << ", s: " << model.s << "\n"
 			  << "\nHomography:\n"
               << H << "\n\n"
-			  << "Number of scale-inliers: " << num_scale_inliers << "\n"
+			  << "Number of scale-inliers: " << num_inliers << "\n"
               << "\n"
               << "Estimated vs Ground-Truth Rectified Feature:\n";
 
@@ -230,7 +224,7 @@ int main(int argc, char* argv[])
         model.rectifyFeature(x, y, dummy, s);
 		model.denormalizeFeature(x, y, s);
         std::cout << "#" << i << ":\n"
-				  << "\tScale-inlier: " << (scale_inliers[i] ? "true" : "false") << "\n"
+				  << "\tScale-inlier: " << (inliers[i] ? "true" : "false") << "\n"
                   << "\tEST: (" << x << ", " << y << ", " << s << ")\n";
         x = gt_rectified_features[i * kFeatureSize + 0];
         y = gt_rectified_features[i * kFeatureSize + 1];
