@@ -116,6 +116,14 @@ public:
 		return solver->squaredResidual(data, model);
 	}
 
+    inline bool isValidSample(
+		const cv::Mat& data,
+		const InlierContainerType& inliers
+	) const override
+	{
+		return solver->isValidSample(data, inliers);
+	}
+
     // Estimating the model from a minimal sample
     inline bool estimateModel(
         const cv::Mat& data,

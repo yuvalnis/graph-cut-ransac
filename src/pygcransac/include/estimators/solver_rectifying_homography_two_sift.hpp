@@ -28,6 +28,15 @@ public:
         return {2, 2};
     }
 
+    inline bool isValidSample(
+		[[maybe_unused]] const cv::Mat& data,
+		[[maybe_unused]] const InlierContainerType& inliers
+	) const override
+	{
+        // TODO
+		return true;
+	}
+
     bool estimateModel(
         const cv::Mat& data,
         const InlierContainerType& inliers,
@@ -705,6 +714,23 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
 			norm_features_ptr[i * n_cols + j] = feature[j];
         }
     }
+
+    // for (size_t i = 0; i < inliers.size(); i++)
+    // {
+    //     const auto* feature = get_inlier(i);
+    //     norm_features_ptr[i * n_cols + x_pos] = feature[x_pos];
+    //     norm_features_ptr[i * n_cols + y_pos] = feature[y_pos];
+    //     norm_features_ptr[i * n_cols + t_pos] = feature[t_pos];
+    //     norm_features_ptr[i * n_cols + s_pos] = feature[s_pos];
+
+    //     for (size_t j = feature_size; j < n_cols; j++)
+    //     {
+	// 	    norm_features_ptr[i * n_cols + j] = feature[j];
+    //     }
+    // }
+    // normalizing_transform.x0 = 0.0;
+    // normalizing_transform.y0 = 0.0;
+    // normalizing_transform.s = 1.0;
 
     return true;
 }

@@ -67,6 +67,14 @@ public:
 	// The minimum number of points required for the estimation
 	inline virtual SampleSizeType sampleSize() const = 0;
 
+	inline virtual bool isValidSample(
+		[[maybe_unused]] const cv::Mat& data,
+		[[maybe_unused]] const InlierContainerType& inliers
+	) const
+	{
+		return true;
+	}
+
 	// Estimate the model parameters from the given point sample
 	// using weighted fitting if possible.
 	virtual bool estimateModel(

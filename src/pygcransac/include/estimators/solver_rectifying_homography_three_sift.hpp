@@ -26,6 +26,49 @@ public:
     // The minimum number of points required for the estimation
     inline std::array<size_t, 1> sampleSize() const { return {3}; }
 
+    static bool areAllPointsNotCollinear(
+        const cv::Mat& data,
+		const std::vector<size_t>& inliers
+    )
+    {
+        constexpr double tol{1}; // minimal area of parallelogram 
+        // Check that all points are collinear
+        const auto n = inliers.size();
+        if (n < 3)
+        {
+            // Less than 3 points are always collinear by definition
+            return false;
+        }
+
+        for (size_t i = 0; i < n - 2; i++)
+        {
+            auto idx1 = inliers.at(i);
+            auto idx2 = inliers.at(i + 1);
+            auto idx3 = inliers.at(i + 2);
+            double x1 = data.at<double>(idx1, x_pos);
+            double y1 = data.at<double>(idx1, y_pos);
+            double x2 = data.at<double>(idx2, x_pos);
+            double y2 = data.at<double>(idx2, y_pos);
+            double x3 = data.at<double>(idx3, x_pos);
+            double y3 = data.at<double>(idx3, y_pos);
+            double cp = utils::crossProduct(x1, y1, x2, y2, x3, y3);
+            if (std::abs(cp) > tol)
+            {
+                return true;
+            }
+        }
+
+		return false;
+    }
+    
+    inline bool isValidSample(
+		const cv::Mat& data,
+		const InlierContainerType& inliers
+	) const override
+	{
+        return areAllPointsNotCollinear(data, inliers[0]);
+	}
+
     // Estimate the model parameters from the given point sample
     // using weighted fitting if possible.
     bool estimateModel(

@@ -94,12 +94,9 @@ public:
 	// A function to decide if the selected sample is degenerate or not
 	// before calculating the model parameters
 	inline virtual bool isValidSample(
-		[[maybe_unused]] const cv::Mat& data, // All data points
-		[[maybe_unused]] const InlierContainerType& inliers
-	) const // The indices of the selected points
-	{
-		return true;
-	}
+		const cv::Mat& data,
+		const InlierContainerType& inliers
+	) const = 0;
 
 	// Enable a quick check to see if the model is valid. This can be a geometric
 	// check or some other verification of the model structure.

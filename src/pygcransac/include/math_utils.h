@@ -39,6 +39,19 @@ namespace gcransac
 {
 	namespace utils
 	{
+		double crossProduct(
+			const double& x1, const double& y1,
+			const double& x2, const double& y2,
+			const double& x3, const double& y3
+		)
+		{
+			const auto dx1 = x2 - x1;
+			const auto dy1 = y2 - y1;
+			const auto dx2 = x3 - x1;
+			const auto dy2 = y3 - y1;
+			return dx1 * dy2 - dy1 * dx2;
+		}
+
 		// Pivoting In-Place Gauss Elimination to solve problem A * x = b,
 		// where A is the known coefficient matrix, b is the inhomogeneous part and x is the unknown vector.
 		// Form: matrix_ = [A, b].
