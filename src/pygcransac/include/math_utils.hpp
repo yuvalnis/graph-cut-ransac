@@ -97,6 +97,13 @@ bool areCollinear(
     return measure < tolerance;
 }
 
+inline bool areCollinear(
+    const Point2D& p1, const Point2D& p2, const Point2D& p3, double tolerance
+)
+{
+    return areCollinear(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y(), tolerance);
+}
+
 // Pivoting In-Place Gauss Elimination to solve problem A * x = b,
 // where A is the known coefficient matrix, b is the inhomogeneous part and x is the unknown vector.
 // Form: matrix_ = [A, b].

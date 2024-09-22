@@ -3,11 +3,12 @@ project(GraphCutRANSAC LANGUAGES CXX)
 
 # indicate if OPENMP should be enabled
 option(CREATE_SAMPLE_PROJECT "Create the Sample Project" OFF)
+option(UNIT_TESTS "Run unit tests" ON)
 option(TEST_THREE_SIFT_SCALE_ONLY "Test Three SIFT Scale Only" OFF)
 option(TEST_TWO_SIFT "Test Two SIFT" OFF)
 option(TEST_NON_ID_TWO_SIFT "Test Non Identity TWO SIFT" ON)
 option(TEST_NON_ID_THREE_SIFT "Test Non Identity THREE SIFT" ON)
-option(TEST_THREE_SIFT_CUSTOM_DATA "Test THREE SIFT Custom Data" ON)
+option(TEST_THREE_SIFT_CUSTOM_DATA "Test THREE SIFT Custom Data" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -97,6 +98,34 @@ if (CREATE_SAMPLE_PROJECT)
 
 	add_dependencies(SampleProject ${PROJECT_NAME})
 endif (CREATE_SAMPLE_PROJECT)
+
+if (UNIT_TESTS)
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
+
+	add_executable(
+		unit_tests
+		examples/unit_tests.cpp
+	)
+
+	target_sources(
+		unit_tests
+		PRIVATE ${GCRANSAC_PYTHON_SRC}
+	)
+		
+	target_link_libraries (unit_tests 
+		Eigen3::Eigen)
+		
+	target_link_libraries(unit_tests 
+		${OpenCV_LIBS}
+	)
+
+	target_link_libraries(unit_tests 
+		debug 
+		${PROJECT_NAME}
+	)
+
+	add_dependencies(unit_tests ${PROJECT_NAME})
+endif()
 
 if (TEST_THREE_SIFT_SCALE_ONLY)
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
