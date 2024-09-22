@@ -33,10 +33,33 @@
 // Author: Daniel Barath (barath.daniel@sztaki.mta.hu)
 #pragma once
 
+#include <vector>
+#include <algorithm>
 #include <Eigen/Eigen>
 
 namespace gcransac::utils
 {
+
+class Point2D
+{
+public:
+
+    Point2D() : m_x(0), m_y(0) {}
+    Point2D(double x, double y) : m_x(x), m_y(y) {}
+    inline const double& x() const { return m_x; }
+    inline const double& y() const { return m_y; }
+
+    // Overloading < operator to allow sorting points by lexicographical order
+    bool operator<(const Point2D& p) const
+    {
+        return m_x < p.x() || (m_x == p.x() && m_y < p.y());
+    }
+
+private:
+
+    double m_x;
+    double m_y;
+};
 
 bool areCollinear(
 	double x1, double y1, double x2, double y2, double x3, double y3,
@@ -131,6 +154,97 @@ void gaussElimination(
         //now finally divide the rhs by the coefficient of the variable to be calculated
         result_(row_idx) = result_(row_idx) / matrix_(row_idx, row_idx);
     }
+}
+
+/// @brief Computes the two-dimensional cross-product of the vectors OP and OQ
+/// (with O as the origin).
+/// @param O Point2D representing the origin. 
+/// @param P Point2D to which the first vector is pointing from the origin.
+/// @param Q Point2D to which the second vector is pointing from the origin.
+/// @return The two-dimensional cross-product of OP and OQ.
+inline double crossProduct(const Point2D& O, const Point2D& P, const Point2D& Q)
+{
+    return (P.x() - O.x()) * (Q.y() - O.y()) - (P.y() - O.y()) * (Q.x() - O.x());
+}
+
+/// @brief Computes the convex-hull of points. The set of points is ordered
+/// lexicographically during the runtime of this function.
+/// @param points a set of points, represented by a vector of Point2D.
+/// @return A polygon, represented by a vector of Point2D, which forms the
+/// convex-hull of points.
+std::vector<Point2D> computeConvexHull(std::vector<Point2D>& points)
+{
+    const size_t n_points = points.size();
+    if (n_points <= 3)
+    {
+        // In a 2D-plane, any set of three points or less is its own convex-hull.
+        return points;
+    }
+    // Initialize result vector to twice the size the input as in the worst-case
+    // it can hold all points twice.
+    std::vector<Point2D> result(2 * n_points);
+    // Sort points lexicographically.
+    std::sort(points.begin(), points.end());
+    // Build lower hull.
+    size_t k{0};
+	for (size_t i = 0; i < n_points; ++i)
+    {
+		while (k >= 2 && crossProduct(result[k-2], result[k-1], points[i]) <= 0)
+        {
+            k--;
+        }
+		result[k++] = points[i];
+	}
+	// Build upper hull.
+    const size_t t = k + 1; 
+	for (size_t i = n_points - 1; i > 0; --i)
+    {
+		while (k >= t && crossProduct(result[k-2], result[k-1], points[i-1]) <= 0)
+        {
+            k--;
+        }
+		result[k++] = points[i - 1];
+	}
+    // Resize result to fit convex-hull size and return.
+	result.resize(k-1);
+	return result;
+}
+
+/// @brief Checks if a 2D-point is contained within a convex polygon.
+/// @param point a 2D-point
+/// @param polygon a collection of 2D-points representing the vertices of a
+/// convex polygon.
+/// @return True, if the point is inside the polygon. False, otherwise.
+bool pointInConvexPolygon(
+    const Point2D& point,
+    const std::vector<Point2D>& polygon
+)
+{
+    const size_t n_verts = polygon.size();
+    if (n_verts < 3)
+    {
+        return false;
+    }
+
+    bool positive = false;
+    bool negative = false;
+    for (size_t i = 0; i < n_verts; i++)
+    {
+        double cp = crossProduct(polygon[i], polygon[(i + 1) % n_verts], point);
+        if (cp > 0)
+        {
+            positive = true;
+        }
+        else if (cp < 0)
+        {
+            negative = true;
+        }
+        if (positive && negative)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 }
