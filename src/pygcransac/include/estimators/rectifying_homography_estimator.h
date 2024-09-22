@@ -206,7 +206,7 @@ public:
         getInlierWeights(
             weights, inliers, inlier_weights
         );
-        // sample_ = nullptr because normalized features and wieights are now
+        // sample_ = nullptr because normalized features and weights are now
         // made up only of inlier features and weights.
         success = solver->estimateModel(
             normalized_features, inliers_of_normed_data, models, inlier_weights

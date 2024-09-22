@@ -5,6 +5,7 @@
 #include "preemption/preemption_sprt.h"
 #include "inlier_selectors/empty_inlier_selector.h"
 
+#include <iostream>
 #include <vector>
 #include <opencv2/core/core.hpp>
 #include <Eigen/Eigen>
@@ -15,16 +16,16 @@
 using namespace gcransac;
 
 int findRectifyingHomographyScaleOnly_(
-	std::vector<double>& features,	// input SIFT features
-	std::vector<double>& weights,	// input SIFT feature weights
+	const std::vector<double>& features,	// input SIFT features
+	const std::vector<double>& weights,	// input SIFT feature weights
 	double scale_residual_thresh, // threshold for inlier selection
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
 	size_t max_iteration_number,
 	size_t max_local_optimization_number,
-	[[maybe_unused]] sampler::SamplerType sampler_type,
 	std::vector<bool>& inliers,	// output inlier boolean mask
-	std::vector<double>& homography	// output homography
+	std::vector<double>& homography, // output homography
+	unsigned int verbose_level
 )
 {
 	using namespace neighborhood;
@@ -32,13 +33,12 @@ int findRectifyingHomographyScaleOnly_(
 
 	constexpr size_t kFeatureSize = 3;	// each SIFT feature contains a 2D-coordinate and scale
 
-	if (features.size() % kFeatureSize != 0)
+	if (features.empty() || features.size() % kFeatureSize != 0)
 	{
 		fprintf(stderr,
-			"The container of SIFT features should have a size which is a \
-			multiple of %lu. Its size is %lu.\n",
-			kFeatureSize,
-			features.size()
+			"The container of SIFT features should have a non-zero size which "
+			"is a multiple of %lu. Its size is %lu.\n",
+			kFeatureSize, features.size()
 		);
 		return 0;
 	}
@@ -48,14 +48,15 @@ int findRectifyingHomographyScaleOnly_(
 	{
 		fprintf(
 			stderr,
-			"The number of weights (%lu) is different than the number of features (%lu).\n",
-			weights.size(),
-			num_features
+			"The number of weights (%lu) is different than the number of "
+			"features (%lu).\n",
+			weights.size(), num_features
 		);
 		return 0;
 	}
 
-	cv::Mat sample_set(num_features, kFeatureSize, CV_64F, &features[0]);
+	cv::Mat sample_set(num_features, kFeatureSize, CV_64F);
+	std::memcpy(sample_set.data, features.data(), features.size() * sizeof(double));
 
 	// initialize neighborhood graph
 	// Using only the point coordinates and not the affine elements when constructing the neighborhood.
@@ -101,28 +102,57 @@ int findRectifyingHomographyScaleOnly_(
 	}
 
 	inliers.resize(num_features, false);
-	const auto num_inliers = statistics.inliers.size();
+	const auto num_inliers = statistics.inliers[0].size();
 	for (size_t pt_idx = 0; pt_idx < num_inliers; ++pt_idx) {
 		inliers[statistics.inliers[0][pt_idx]] = true;
+	}
+
+	if (verbose_level > 0)
+	{
+		std::cout << "\nFinal model:\n"
+				  << "\nh7: " << model.h7 << ", h8: " << model.h8 << ", alpha: " << model.alpha << "\n"
+				  << "\nx0: " << model.x0 << ", y0: " << model.y0 << ", s: " << model.s << "\n"
+				  << "\nHomography:\n"
+				  << H << "\n\n"
+				  << "Number of scale-inliers: " << num_inliers << "\n"
+				  << "\n"
+				  << "Estimated rectified features:\n";
+
+		if (verbose_level > 1)
+		{
+			for (size_t i = 0; i < num_features; i++)
+			{
+				double x = features[i * kFeatureSize + 0];
+				double y = features[i * kFeatureSize + 1];
+				double s = features[i * kFeatureSize + 2];
+				model.normalizeFeature(x, y, s);
+				double dummy = 0.0;
+				model.rectifyFeature(x, y, dummy, s);
+				model.denormalizeFeature(x, y, s);
+				std::cout << "#" << i << ":\n"
+						<< "\tInlier: " << (inliers[i] ? "true" : "false") << "\n"
+						<< "\tRectified feature: (" << x << ", " << y << ", " << s << ")\n";
+			}
+		}
 	}
 
 	return num_inliers;
 }
 
 int findRectifyingHomographySIFT_(
-	std::vector<double>& features, // input SIFT features
-	std::vector<double>& weights, // input SIFT feature weights
+	const std::vector<double>& features, // input SIFT features
+	const std::vector<double>& weights, // input SIFT feature weights
 	double scale_residual_thresh, // threshold for inlier selection
 	double orientation_residual_thresh,
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
 	size_t max_iteration_number,
 	size_t max_local_optimization_number,
-	[[maybe_unused]] sampler::SamplerType sampler_type,
 	std::vector<bool>& scale_inliers, // output scale inlier boolean mask
 	std::vector<bool>& orientation_inliers,	// output orientation inlier boolean mask
 	std::vector<double>& homography, // output estimated homography
-	std::vector<double>& vanishing_points // output vanishing points corresponsing to the estimated homography 
+	std::vector<double>& vanishing_points, // output vanishing points corresponsing to the estimated homography 
+	unsigned int verbose_level
 )
 {
 	using namespace neighborhood;
@@ -151,7 +181,8 @@ int findRectifyingHomographySIFT_(
 		return 0;
 	}
 
-    cv::Mat sample_set(num_features, kFeatureSize, CV_64F, &features[0]);
+	cv::Mat sample_set(num_features, kFeatureSize, CV_64F);
+	std::memcpy(sample_set.data, features.data(), features.size() * sizeof(double));
 
     // initialize neighborhood graph
 	cv::Mat empty_point_matrix(0, kFeatureSize, CV_64F);
@@ -231,6 +262,39 @@ int findRectifyingHomographySIFT_(
 	const auto num_orientation_inliers = statistics.inliers[1].size();
 	for (size_t pt_idx = 0; pt_idx < num_orientation_inliers; ++pt_idx) {
 		orientation_inliers[statistics.inliers[1][pt_idx]] = true;
+	}
+
+	if (verbose_level > 0)
+	{
+		std::cout << "\nFinal model:\n"
+				  << "\nh7: " << model.h7 << ", h8: " << model.h8 << ", alpha: " << model.alpha << "\n"
+				  << "\nx0: " << model.x0 << ", y0: " << model.y0 << ", s: " << model.s << "\n"
+				  << "\nHomography:\n"
+				  << H << "\n\n"
+				  << "first vanishing point (unnormalized): " << vp1.transpose() << "\n"
+				  << "second vanishing point (unnormalized): " << vp2.transpose() << "\n"
+				  << "Number of scale-inliers: " << num_scale_inliers << "\n"
+				  << "Number of orientation-inliers: " << num_orientation_inliers << "\n"
+				  << "\n"
+				  << "Estimated rectified features:\n";
+
+		if (verbose_level > 1)
+		{
+			for (size_t i = 0; i < num_features; i++)
+			{
+				double x = features[i * kFeatureSize + 0];
+				double y = features[i * kFeatureSize + 1];
+				double t = features[i * kFeatureSize + 2];
+				double s = features[i * kFeatureSize + 3];
+				model.normalizeFeature(x, y, s);
+				model.rectifyFeature(x, y, t, s);
+				model.denormalizeFeature(x, y, s);
+				std::cout << "#" << i << ":\n"
+						<< "\tScale-inlier: " << (scale_inliers[i] ? "true" : "false") << ", "
+						<< "\tOrientation-inlier: " << (orientation_inliers[i] ? "true" : "false") << "\n"
+						<< "\tRectified feature: (" << x << ", " << y << ", " << (180.0 * M_1_PI * t) << ", " << s << ")\n";
+			}
+		}
 	}
 
 	// TODO

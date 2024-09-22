@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include "model.h"
 #include "solver_engine.h"
-#include "math_utils.h"
+#include "math_utils.hpp"
 
 namespace gcransac::estimator::solver
 {

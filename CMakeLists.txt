@@ -7,6 +7,7 @@ option(TEST_THREE_SIFT_SCALE_ONLY "Test Three SIFT Scale Only" OFF)
 option(TEST_TWO_SIFT "Test Two SIFT" OFF)
 option(TEST_NON_ID_TWO_SIFT "Test Non Identity TWO SIFT" ON)
 option(TEST_NON_ID_THREE_SIFT "Test Non Identity THREE SIFT" ON)
+option(TEST_THREE_SIFT_CUSTOM_DATA "Test THREE SIFT Custom Data" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,6 +51,7 @@ include_directories(${SOURCE_DIR}/include)
 # Set header files for the library
 file(GLOB_RECURSE HDRS_GCRANSAC
 	"${SOURCE_DIR}/include/*.h"
+	"${SOURCE_DIR}/include/*.hpp"
 ) 
 
 # Set source files to be added to the library
@@ -75,8 +77,6 @@ target_link_libraries (${PROJECT_NAME}
 	Eigen3::Eigen)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
-
-
 	
 # ==============================================================================
 # Structure: Applications
@@ -101,8 +101,15 @@ endif (CREATE_SAMPLE_PROJECT)
 if (TEST_THREE_SIFT_SCALE_ONLY)
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
 
-	add_executable(test_three_sift_scale_only
-		examples/test_three_sift_scale_only.cpp)
+	add_executable(
+		test_three_sift_scale_only
+		examples/test_three_sift_scale_only.cpp
+	)
+
+	target_sources(
+		test_three_sift_scale_only
+		PRIVATE ${GCRANSAC_PYTHON_SRC}
+	)
 		
 	target_link_libraries (test_three_sift_scale_only 
 		Eigen3::Eigen)
@@ -122,9 +129,12 @@ endif()
 if (TEST_TWO_SIFT)
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
 
-	add_executable(test_two_sift
-		examples/test_two_sift.cpp)
-		
+	add_executable(
+		test_two_sift
+		examples/test_two_sift.cpp
+		${SOURCE_DIR}/src/gcransac_python.cpp
+	)
+
 	target_link_libraries (test_two_sift 
 		Eigen3::Eigen)
 		
@@ -143,9 +153,12 @@ endif()
 if (TEST_NON_ID_TWO_SIFT)
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
 
-	add_executable(test_non_identity_homography_two_sift
-		examples/test_non_identity_homography_two_sift.cpp)
-		
+	add_executable(
+		test_non_identity_homography_two_sift
+		examples/test_non_identity_homography_two_sift.cpp
+		${SOURCE_DIR}/src/gcransac_python.cpp
+	)
+
 	target_link_libraries (test_non_identity_homography_two_sift 
 		Eigen3::Eigen)
 		
@@ -164,9 +177,12 @@ endif()
 if (TEST_NON_ID_THREE_SIFT)
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
 
-	add_executable(test_non_identity_homography_three_sift_scale_only
-		examples/test_non_identity_homography_three_sift_scale_only.cpp)
-		
+	add_executable(
+		test_non_identity_homography_three_sift_scale_only
+		examples/test_non_identity_homography_three_sift_scale_only.cpp
+		${SOURCE_DIR}/src/gcransac_python.cpp
+	)
+
 	target_link_libraries (test_non_identity_homography_three_sift_scale_only 
 		Eigen3::Eigen)
 		
@@ -180,4 +196,28 @@ if (TEST_NON_ID_THREE_SIFT)
 	)
 
 	add_dependencies(test_non_identity_homography_three_sift_scale_only ${PROJECT_NAME})
+endif()
+
+if (TEST_THREE_SIFT_CUSTOM_DATA)
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
+
+	add_executable(
+		test_three_sift_custom_data
+		examples/test_three_sift_scale_only_custom_data.cpp
+		${SOURCE_DIR}/src/gcransac_python.cpp
+	)
+
+	target_link_libraries (test_three_sift_custom_data 
+		Eigen3::Eigen)
+		
+	target_link_libraries(test_three_sift_custom_data 
+		${OpenCV_LIBS}
+	)
+
+	target_link_libraries(test_three_sift_custom_data 
+		debug 
+		${PROJECT_NAME}
+	)
+
+	add_dependencies(test_three_sift_custom_data ${PROJECT_NAME})
 endif()

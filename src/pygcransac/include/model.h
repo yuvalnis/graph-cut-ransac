@@ -295,7 +295,8 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 		H << 1,  0,  0,
 			 0,  1,  0,
 			 h7, h8, 1;
-		return N.inverse() * H * N;
+		Eigen::Matrix3d result = N.inverse() * H * N;
+		return result / result(2, 2);
 	}
 };
 

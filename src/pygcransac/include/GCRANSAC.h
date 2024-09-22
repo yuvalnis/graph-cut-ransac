@@ -120,10 +120,10 @@ public:
 		{
 			if (inliers_sizes[i] < min_sample_sizes[i])
 			{
-				return false;
+				return true;
 			}
 		}
-		return true;
+		return false;
 	}
 
 	static bool isSampleMinimal(
@@ -497,6 +497,7 @@ public:
 				do_local_optimization) // A flag to decide if all the criteria meet to apply local optimization
 			{
 				// Increase the number of local optimizations applied
+				// TODO this is already done inside the method graphCutLocalOptimization - consider removing
 				++statistics.local_optimization_number;
 
 				// Graph-cut-based local optimization 

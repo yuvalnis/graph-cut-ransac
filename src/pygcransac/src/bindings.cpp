@@ -14,8 +14,7 @@ py::tuple findRectifyingHomographyScaleOnly(
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
 	size_t max_iteration_number,
-	size_t max_local_optimization_number,
-	gcransac::sampler::SamplerType sampler_type
+	size_t max_local_optimization_number
 )
 {
 	constexpr size_t kFeatureSize = 3;
@@ -60,7 +59,6 @@ py::tuple findRectifyingHomographyScaleOnly(
 		min_iteration_number,
 		max_iteration_number,
 		max_local_optimization_number,
-		sampler_type,
 		cpp_inliers,
 		cpp_homography
 	);
@@ -97,8 +95,7 @@ py::tuple findRectifyingHomographySIFT(
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
 	size_t max_iteration_number,
-	size_t max_local_optimization_number,
-	gcransac::sampler::SamplerType sampler_type
+	size_t max_local_optimization_number
 )
 {
 	constexpr size_t kFeatureSize = 4;
@@ -154,7 +151,6 @@ py::tuple findRectifyingHomographySIFT(
 		min_iteration_number,
 		max_iteration_number,
 		max_local_optimization_number,
-		sampler_type,
 		cpp_scale_inliers,
 		cpp_orientation_inliers,
 		cpp_homography,
@@ -218,12 +214,12 @@ PYBIND11_PLUGIN(pygcransac) {
 
     )doc");
 
-	py::enum_<gcransac::sampler::SamplerType>(m, "SamplerType")
-		.value("UNIFORM", gcransac::sampler::SamplerType::Uniform)
-		.value("PROSAC", gcransac::sampler::SamplerType::ProSaC)
-		.value("PROGRESSIVE_NAPSAC", gcransac::sampler::SamplerType::ProgressiveNapsac)
-		.value("IMPORTANCE", gcransac::sampler::SamplerType::Importance)
-		.value("ADAPTIVE_REORDERING", gcransac::sampler::SamplerType::AdaptiveReordering);
+	// py::enum_<gcransac::sampler::SamplerType>(m, "SamplerType")
+	// 	.value("UNIFORM", gcransac::sampler::SamplerType::Uniform)
+	// 	.value("PROSAC", gcransac::sampler::SamplerType::ProSaC)
+	// 	.value("PROGRESSIVE_NAPSAC", gcransac::sampler::SamplerType::ProgressiveNapsac)
+	// 	.value("IMPORTANCE", gcransac::sampler::SamplerType::Importance)
+	// 	.value("ADAPTIVE_REORDERING", gcransac::sampler::SamplerType::AdaptiveReordering);
 
 	m.def("findRectifyingHomographyScaleOnly", &findRectifyingHomographyScaleOnly, R"doc(some doc)doc",
 		py::arg("features"),
@@ -232,8 +228,7 @@ PYBIND11_PLUGIN(pygcransac) {
 		py::arg("spatial_coherence_weight") = 0.0,
 		py::arg("min_iteration_number") = 10000,
 		py::arg("max_iteration_number") = 10000,
-		py::arg("max_local_optimization_number") = 50,
-		py::arg("sampler_type") = gcransac::sampler::SamplerType::Uniform
+		py::arg("max_local_optimization_number") = 50
 	);
 
 	m.def("findRectifyingHomographySIFT", &findRectifyingHomographySIFT, R"doc(some doc)doc",
@@ -244,8 +239,7 @@ PYBIND11_PLUGIN(pygcransac) {
 		py::arg("spatial_coherence_weight") = 0.0,
 		py::arg("min_iteration_number") = 10000,
 		py::arg("max_iteration_number") = 10000,
-		py::arg("max_local_optimization_number") = 50,
-		py::arg("sampler_type") = gcransac::sampler::SamplerType::Uniform
+		py::arg("max_local_optimization_number") = 50
 	);
 
   	return m.ptr();

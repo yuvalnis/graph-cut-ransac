@@ -121,7 +121,8 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
-	cv::Mat sample_set(num_features, kFeatureSize, CV_64F, &features[0]);
+	cv::Mat sample_set(num_features, kFeatureSize, CV_64F);
+	std::memcpy(sample_set.data, features.data(), features.size() * sizeof(double));
 
 	// initialize neighborhood graph
 	// Using only the point coordinates and not the affine elements when constructing the neighborhood.
