@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cmath>
+#include <limits.h>
 #include <unordered_map>
 #include "model.h"
 #include "solver_engine.h"
@@ -28,14 +29,10 @@ public:
         return {2, 2};
     }
 
-    inline bool isValidSample(
-		[[maybe_unused]] const cv::Mat& data,
-		[[maybe_unused]] const InlierContainerType& inliers
-	) const override
-	{
-        // TODO
-		return true;
-	}
+    bool isValidSample(
+		const cv::Mat& data,
+		const InlierContainerType& inliers
+	) const override;
 
     bool estimateModel(
         const cv::Mat& data,
@@ -146,6 +143,86 @@ double absoluteAngleDiff(const double& angle1, const double& angle2)
         std::fmin(diff1, kTwoPI - diff1),
         std::fmin(diff2, kTwoPI - diff2)
     );
+}
+
+bool RectifyingHomographyTwoSIFTSolver::isValidSample(
+    const cv::Mat& data,
+    const InlierContainerType& inliers
+) const
+{
+    const auto& orient_inliers = inliers[orient_set_idx];
+    if (orient_inliers.size() < 2)
+    {
+        // Need at least two orientation inliers to produce a vanishing point
+        return true;
+    }
+    // Collect points for convex-hull computation, while computing the minimal
+    // and maximal values in each axis
+    double x_min{DBL_MAX};
+    double x_max{DBL_MIN};
+    double y_min{DBL_MAX};
+    double y_max{DBL_MIN};
+    std::vector<utils::Point2D> points;
+    points.reserve(inliers[0].size() + inliers[1].size());
+    for (const auto& inlier_set : inliers)
+    {
+        for (const auto& idx : inlier_set)
+        {
+            auto x = data.at<double>(idx, x_pos);
+            auto y = data.at<double>(idx, y_pos);
+            x_min = std::min(x, x_min);
+            x_max = std::max(x, x_max);
+            y_min = std::min(y, y_min);
+            y_max = std::max(y, y_max);
+            points.emplace_back(x, y);
+        }
+    }
+    // Compute convex-hull
+    const auto convex_hull = utils::computeConvexHull(points);
+    // For each vanishing point, first check if it is degenerate (zero-norm),
+    // and then check if it is outside the convex-hull.
+    for (size_t i = 0; i < orient_inliers.size() - 1; i++)
+    {
+        auto idx_i = orient_inliers.at(i);
+        auto xi = data.at<double>(idx_i, x_pos);
+        auto yi = data.at<double>(idx_i, y_pos);
+        auto ti = data.at<double>(idx_i, t_pos);
+        auto li = lineFromSIFT(xi, yi, ti);
+        for (size_t j = i + 1; j < orient_inliers.size(); j++)
+        {
+            auto idx_j = orient_inliers.at(j);
+            auto xj = data.at<double>(idx_j, x_pos);
+            auto yj = data.at<double>(idx_j, y_pos);
+            auto tj = data.at<double>(idx_j, t_pos);
+            auto lj = lineFromSIFT(xj, yj, tj);
+            auto vp = li.cross(lj); // intersection of lines is vanishing point
+            if ((vp.array().cwiseAbs() < 1e-6).all())
+            {
+                fprintf(stdout, "Degenerate vanishing point\n");
+                return false;
+            }
+            if (std::abs(vp[2]) < 1e-6)
+            {
+                // If vanishing point is at infinity, it is outside the
+                // convex-hull 
+                continue;
+            }
+            vp /= vp[2];
+            // Perform faster check if vanishing point is outside the bounding
+            // box of the convex-hull
+            bool outside_bbx = vp[0] < x_min || x_max < vp[0];
+            bool outside_bby = vp[1] < y_min || y_max < vp[1];
+            if (outside_bbx && outside_bby)
+            {
+                continue;
+            }
+            if (utils::pointInConvexPolygon({vp[0], vp[1]}, convex_hull))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 void RectifyingHomographyTwoSIFTSolver::setScaleConstraint(
