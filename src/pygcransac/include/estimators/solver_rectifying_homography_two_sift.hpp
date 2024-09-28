@@ -225,9 +225,15 @@ double RectifyingHomographyTwoSIFTSolver::rectifiedAngle(
     const SIFTRectifyingHomography& model
 )
 {
-    return fmod(model.rectifiedAngle(
+    double rect_angle = model.rectifiedAngle(
         feature[x_pos], feature[y_pos], feature[t_pos]
-    ), M_PI);
+    );
+    rect_angle = fmod(rect_angle, M_PI);
+    if (std::signbit(rect_angle))
+    {
+        rect_angle += 2.0 * M_PI;
+    }
+    return rect_angle;
 }
 
 constexpr inline size_t nChoose2(const size_t& n)
