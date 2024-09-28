@@ -9,6 +9,7 @@ option(TEST_TWO_SIFT "Test Two SIFT" OFF)
 option(TEST_NON_ID_TWO_SIFT "Test Non Identity TWO SIFT" ON)
 option(TEST_NON_ID_THREE_SIFT "Test Non Identity THREE SIFT" ON)
 option(TEST_THREE_SIFT_CUSTOM_DATA "Test THREE SIFT Custom Data" OFF)
+option(TEST_TWO_SIFT_CUSTOM_DATA "Test TWO SIFT Custom Data" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -249,4 +250,28 @@ if (TEST_THREE_SIFT_CUSTOM_DATA)
 	)
 
 	add_dependencies(test_three_sift_custom_data ${PROJECT_NAME})
+endif()
+
+if (TEST_TWO_SIFT_CUSTOM_DATA)
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
+
+	add_executable(
+		test_two_sift_custom_data
+		examples/test_two_sift_custom_data.cpp
+		${SOURCE_DIR}/src/gcransac_python.cpp
+	)
+
+	target_link_libraries (test_two_sift_custom_data 
+		Eigen3::Eigen)
+		
+	target_link_libraries(test_two_sift_custom_data 
+		${OpenCV_LIBS}
+	)
+
+	target_link_libraries(test_two_sift_custom_data 
+		debug 
+		${PROJECT_NAME}
+	)
+
+	add_dependencies(test_two_sift_custom_data ${PROJECT_NAME})
 endif()
