@@ -34,6 +34,8 @@
 #pragma once
 
 #include <vector>
+#include <string>
+#include <sstream>
 #include <algorithm>
 #include <Eigen/Eigen>
 
@@ -53,6 +55,12 @@ public:
     bool operator<(const Point2D& p) const
     {
         return m_x < p.x() || (m_x == p.x() && m_y < p.y());
+    }
+
+    std::string toString() const {
+        std::ostringstream oss;
+        oss << "(" << m_x << ", " << m_y << ")";
+        return oss.str();
     }
 
 private:
@@ -182,9 +190,8 @@ inline double crossProduct(const Point2D& O, const Point2D& P, const Point2D& Q)
 std::vector<Point2D> computeConvexHull(std::vector<Point2D>& points)
 {
     const size_t n_points = points.size();
-    if (n_points <= 3)
+    if (n_points <= 1)
     {
-        // In a 2D-plane, any set of three points or less is its own convex-hull.
         return points;
     }
     // Initialize result vector to twice the size the input as in the worst-case
@@ -213,7 +220,17 @@ std::vector<Point2D> computeConvexHull(std::vector<Point2D>& points)
 		result[k++] = points[i - 1];
 	}
     // Resize result to fit convex-hull size and return.
-	result.resize(k-1);
+	result.resize(k - 1);
+    // Check special case where result has two vertices that are the same
+    if (result.size() == 2)
+    {
+        bool close_x = std::abs(result[0].x() - result[1].x()) < 1e-9;
+        bool close_y = std::abs(result[0].y() - result[1].y()) < 1e-9;
+        if (close_x && close_y)
+        {
+            result.resize(1);
+        }
+    }
 	return result;
 }
 

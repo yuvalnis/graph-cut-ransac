@@ -91,7 +91,79 @@ void testConvexHullAlgo()
     }
 }
 
-void testPointInConvexPolygonPositiveCase()
+void testDegenerateConvexHull1D()
+{
+    using namespace gcransac::utils;
+    const Point2D expected_vertex{1.45, -5.2};
+    // Construct input
+    std::vector<Point2D> points{10, expected_vertex};
+    // Find the convex hull
+    std::vector<Point2D> actual = computeConvexHull(points);
+    // Verify expected and actual output are the same size
+    if (actual.size() != 1)
+    {
+        std::stringstream error_msg;
+        error_msg << "Expected convex-hull size is 1, but actual convex-hull "
+                     "size is " << actual.size() << std::endl;
+        throw std::runtime_error(error_msg.str());
+    }
+    const auto& actual_vertex = actual.at(0);
+    if ((std::abs(actual_vertex.x() - expected_vertex.x()) > 1e-9) ||
+        (std::abs(actual_vertex.y() - expected_vertex.y()) > 1e-9))
+    {
+        std::stringstream error_msg;
+        error_msg << "Expected convex-hull single vertex to be "
+                  << expected_vertex.toString() << ", but it actually is "
+                  << actual_vertex.toString() << std::endl;
+        throw std::runtime_error(error_msg.str());
+    }
+}
+
+void testDegenerateConvexHull2D()
+{
+    using namespace gcransac::utils;
+    // Construct expected output
+    const Point2D expected_vertex_1{1.45, -5.2};
+    const Point2D expected_vertex_2{-3.14, -1.73};
+    std::vector<Point2D> expected{expected_vertex_1, expected_vertex_2};
+    // Construct input
+    std::vector<Point2D> points;
+    for (size_t i = 0; i < 5; i++)
+    {
+        points.push_back(expected_vertex_1);
+        points.push_back(expected_vertex_2);
+    }
+    // Find the convex hull
+    std::vector<Point2D> actual = computeConvexHull(points);
+    // Verify expected and actual output are the same size
+    if (actual.size() != expected.size())
+    {
+        std::stringstream error_msg;
+        error_msg << "Expected convex-hull size is " << expected.size()
+                  << ", but actual convex-hull size is " << actual.size()
+                  << std::endl;
+        throw std::runtime_error(error_msg.str());
+    }
+    // Sort actual and expected outputs
+    std::sort(actual.begin(), actual.end());
+    std::sort(expected.begin(), expected.end());
+    // Verify both are equal
+    for (size_t i = 0; i < actual.size(); i++)
+    {
+        const auto& p = actual.at(i);
+        const auto& q = expected.at(i);
+        if (p.x() != q.x() || p.y() != q.y())
+        {
+            std::stringstream error_msg;
+            error_msg << "Actual convex-hull is different than expected. "
+                      << "Point at index " << i << " is " << p.toString()
+                      << ", when " << q.toString() << ", was expected.\n";
+            throw std::runtime_error(error_msg.str());
+        }
+    }
+}
+
+void testPointInsideConvexPolygon()
 {
     using namespace gcransac::utils;
     // Construct a convex polygon
@@ -117,7 +189,7 @@ void testPointInConvexPolygonPositiveCase()
     }
 }
 
-void testPointInConvexPolygonNegativeCase()
+void testPointOutsideConvexPolygon()
 {
     using namespace gcransac::utils;
     // Construct a convex polygon
@@ -133,6 +205,58 @@ void testPointInConvexPolygonNegativeCase()
         std::stringstream error_msg;
         error_msg << "2D-point (" << point.x() << ", " << point.y() << ") "
                   << "is not outside the convex polygon with vertices:";
+        for (size_t i = 0; i < convex_polygon.size(); i++)
+        {
+            const auto& vert = convex_polygon.at(i);
+            error_msg << " (" << vert.x() << ", " << vert.y() << ")";
+        }
+        error_msg << std::endl;
+        throw std::runtime_error(error_msg.str());
+    }
+}
+
+void testPointOnEdgeOfConvexPolygon()
+{
+    using namespace gcransac::utils;
+    // Construct a convex polygon
+    std::vector<Point2D> convex_polygon;
+    convex_polygon.emplace_back(0, 0);
+    convex_polygon.emplace_back(3, 0);
+    convex_polygon.emplace_back(3, 3);
+    convex_polygon.emplace_back(0, 3);
+    // Construct a point expected to be inside of convex polygon
+    const Point2D point{1.5, 1.5};
+    if (!pointInConvexPolygon(point, convex_polygon))
+    {
+        std::stringstream error_msg;
+        error_msg << "2D-point (" << point.x() << ", " << point.y() << ") "
+                  << "is not inside the convex polygon with vertices:";
+        for (size_t i = 0; i < convex_polygon.size(); i++)
+        {
+            const auto& vert = convex_polygon.at(i);
+            error_msg << " (" << vert.x() << ", " << vert.y() << ")";
+        }
+        error_msg << std::endl;
+        throw std::runtime_error(error_msg.str());
+    }
+}
+
+void testPointOnVertexOfConvexPolygon()
+{
+    using namespace gcransac::utils;
+    // Construct a convex polygon
+    std::vector<Point2D> convex_polygon;
+    convex_polygon.emplace_back(0, 0);
+    convex_polygon.emplace_back(3, 0);
+    convex_polygon.emplace_back(3, 3);
+    convex_polygon.emplace_back(0, 3);
+    // Construct a point expected to be inside of convex polygon
+    const Point2D point{3, 3};
+    if (!pointInConvexPolygon(point, convex_polygon))
+    {
+        std::stringstream error_msg;
+        error_msg << "2D-point (" << point.x() << ", " << point.y() << ") "
+                  << "is not inside the convex polygon with vertices:";
         for (size_t i = 0; i < convex_polygon.size(); i++)
         {
             const auto& vert = convex_polygon.at(i);
@@ -165,6 +289,10 @@ int main()
     runTest("collinear positive case", testCollinearPointsPositiveCase);
     runTest("collinear negative case" ,testCollinearPointsNegativeCase);
     runTest("convex-hull", testConvexHullAlgo);
-    runTest("point in convex-polygon positive case", testPointInConvexPolygonPositiveCase);
-    runTest("point in convex-polygon negative case", testPointInConvexPolygonNegativeCase);
+    runTest("degenerate 1D convex-hull", testDegenerateConvexHull1D);
+    runTest("degenerate 2D convex-hull", testDegenerateConvexHull2D);
+    runTest("point inside convex-polygon", testPointInsideConvexPolygon);
+    runTest("point outside convex-polygon", testPointOutsideConvexPolygon);
+    runTest("point on edge of convex-polygon", testPointOnEdgeOfConvexPolygon);
+    runTest("point on vertex of convex-polygon", testPointOnVertexOfConvexPolygon);
 }
