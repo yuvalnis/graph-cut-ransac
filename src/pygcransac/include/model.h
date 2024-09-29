@@ -231,6 +231,22 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 		p(2) = -h7 * p(0) - h8 * p(1) + p(2);
 	}
 
+	inline void rectifyPoint(double& x, double& y) const
+	{
+		Eigen::Vector3d point(x, y, 1.0);
+		rectifyPoint(point);
+		x = point(0) / point(2);
+		y = point(1) / point(2);
+	}
+
+	inline void unrectifyPoint(double& x, double& y) const
+	{
+		Eigen::Vector3d point(x, y, 1.0);
+		unrectifyPoint(point);
+		x = point(0) / point(2);
+		y = point(1) / point(2);
+	}
+
 	double rectifiedAngle(const double& x, const double& y, const double& angle) const
 	{
 		constexpr double kTwoPI = 2.0 * M_PI;
@@ -269,32 +285,29 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 	{
 		angle = rectifiedAngle(x, y, angle);
 		scale = rectifiedScale(x, y, scale);
-		Eigen::Vector3d point(x, y, 1.0);
-		rectifyPoint(point);
-		x = point(0) / point(2);
-		y = point(1) / point(2);
+		rectifyPoint(x, y);
 	}
 
 	void unrectifyFeature(double& x, double& y, double& angle, double& scale) const
 	{
 		angle = unrectifiedAngle(x, y, angle);
 		scale = unrectifiedScale(x, y, scale);
-		Eigen::Vector3d point(x, y, 1.0);
-		unrectifyPoint(point);
-		x = point(0) / point(2);
-		y = point(1) / point(2);
+		unrectifyPoint(x, y);
 	}
 
 	Eigen::Matrix3d getHomography() const
 	{
-		Eigen::Matrix3d N; // normalizing transform
+		// normalizing transform
+		Eigen::Matrix3d N;
 		N << s, 0, -s * x0,
 			 0, s, -s * y0,
 			 0, 0, 1;
-		Eigen::Matrix3d H; // homography in normalized coordinate space
+		// homography in normalized coordinate space
+		Eigen::Matrix3d H;
 		H << 1,  0,  0,
 			 0,  1,  0,
 			 h7, h8, 1;
+		// homography in unnormalized coordinate space
 		Eigen::Matrix3d result = N.inverse() * H * N;
 		return result / result(2, 2);
 	}

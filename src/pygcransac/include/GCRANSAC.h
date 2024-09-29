@@ -37,6 +37,7 @@
 #include <sstream>
 #include <algorithm>
 #include <random>
+#include <iostream>
 #include "energy.h"
 #include "graph.h"
 #include "model.h"
@@ -90,6 +91,7 @@ public:
 	using Model = typename _ModelEstimator::Model;
 	using ResidualType = typename _ModelEstimator::ResidualType;
 	using InlierContainerType = typename _ModelEstimator::InlierContainerType;
+	using DataType = typename _ModelEstimator::DataType;
 	using WeightType = typename _ModelEstimator::WeightType;
 	using SampleSizeType = typename _ModelEstimator::SampleSizeType;
 	using ScoreType = Score<_ModelEstimator::ResidualDimension::value>;
@@ -188,12 +190,12 @@ public:
 
 	// The main method applying Graph-Cut RANSAC to the input data points
 	void run(
-		const cv::Mat &points_,  // Data points
-		const _ModelEstimator &model_estimator, // The model estimator
-		const _NeighborhoodGraph *neighborhood_graph_, // The initialized neighborhood graph
-		Model &obtained_model_, // The output model
-		_PreemptiveModelVerification &preemptive_verification_, // The preemptive verification strategy used
-		_FastInlierSelector &fast_inlier_selector_ // The fast inlier selector used
+		const DataType& points_,  // Data points
+		const _ModelEstimator& model_estimator, // The model estimator
+		const _NeighborhoodGraph* neighborhood_graph_, // The initialized neighborhood graph
+		Model& obtained_model_, // The output model
+		_PreemptiveModelVerification& preemptive_verification_, // The preemptive verification strategy used
+		_FastInlierSelector& fast_inlier_selector_ // The fast inlier selector used
 	)
 	{
 		/* Initialization */
@@ -213,20 +215,17 @@ public:
 		statistics.neighbor_number = 0;
 		statistics.processing_time = 0.0;
 
-		// The size of a minimal sample used for the estimation
 		const SampleSizeType sample_number = model_estimator.sampleSize();
-		point_number = points_.rows; // Number of points in the dataset
-		const auto min_sample_num = *(std::min_element(
-			sample_number.begin(), sample_number.end()
-		));
-		if (point_number < min_sample_num)
+		for (size_t i = 0; i < ResidualDimension; i++)
 		{
-			std::stringstream error_msg;
-			error_msg << "ERROR: insufficient samples to proceed!\n"
-						"There are only " << point_number << " samples and the "
-						"minimal number of samples needed for the model "
-						"estimation is " << min_sample_num << ".\n";
-			throw std::runtime_error(error_msg.str());
+			point_number[i] = points_[i]->rows;
+			if (point_number[i] < sample_number[i])
+			{
+				throw std::runtime_error(
+					"Data set smaller than minimal sample size for "
+					"corresponding data type"
+				);
+			}
 		}
 
 		// log(1 - confidence) used for determining the required number of iterations
@@ -247,8 +246,8 @@ public:
 		std::array<InlierContainerType, 2> temp_inner_inliers{}; // The inliers of the current and previous best models
 		for (size_t i = 0; i < ResidualDimension; i++)
 		{
-			temp_inner_inliers[0][i].reserve(point_number);
-			temp_inner_inliers[1][i].reserve(point_number);
+			temp_inner_inliers[0][i].reserve(point_number[i]);
+			temp_inner_inliers[1][i].reserve(point_number[i]);
 		}
 
 		neighborhood_graph = neighborhood_graph_; // The neighborhood graph used for the graph-cut local optimization
@@ -257,11 +256,10 @@ public:
 		InlierContainerType pool{};
 		for (size_t i = 0; i < ResidualDimension; i++)
 		{
-			auto& pool_i = pool[i];
-			pool_i.reserve(point_number);
-			for (size_t j = 0; j < point_number; j++)
+			pool[i].reserve(point_number[i]);
+			for (size_t j = 0; j < point_number[i]; j++)
 			{
-				pool_i.push_back(j);
+				pool[i].push_back(j);
 			}
 		}
 
@@ -501,7 +499,8 @@ public:
 				++statistics.local_optimization_number;
 
 				// Graph-cut-based local optimization 
-				graphCutLocalOptimization(points_, // All points
+				graphCutLocalOptimization(
+					points_, // All points
 					temp_inner_inliers[inlier_container_offset], // Inlier set of the current so-far-the-best model
 					so_far_the_best_model, // Best model parameters
 					so_far_the_best_score, // Best model score
@@ -549,39 +548,60 @@ public:
 			++statistics.local_optimization_number;
 
 			// Graph-cut-based local optimization 
-			graphCutLocalOptimization(points_, // All points
+			graphCutLocalOptimization(
+				points_, // All points
 				temp_inner_inliers[inlier_container_offset], // Inlier set of the current so-far-the-best model
 				so_far_the_best_model, // Best model parameters
 				so_far_the_best_score, // Best model score
 				model_estimator, // Estimator
-				settings.max_local_optimization_number); // Maximum local optimization steps
+				settings.max_local_optimization_number // Maximum local optimization steps
+			);
 		}
 
 		// Recalculate the score if needed (i.e. there is some inconstistency in
 		// in the number of inliers stored and calculated).
-		if (temp_inner_inliers[inlier_container_offset].size() != so_far_the_best_score.num_inliers())
+		bool diff_inlier_nums = false;
+		for (size_t i = 0; i < ResidualDimension; i++)
+		{
+			const auto& inlier_set = temp_inner_inliers[inlier_container_offset][i];
+			if (inlier_set.size() != so_far_the_best_score.num_inliers_by_type(i))
+			{
+				diff_inlier_nums = true;
+				break;
+			}
+		}
+		if (diff_inlier_nums)
+		{
 			inlier_container_offset = 1 - inlier_container_offset;
+		}
 
-		if (temp_inner_inliers[inlier_container_offset].size() != so_far_the_best_score.num_inliers())
+		diff_inlier_nums = false;
+		for (size_t i = 0; i < ResidualDimension; i++)
+		{
+			const auto& inlier_set = temp_inner_inliers[inlier_container_offset][i];
+			if (inlier_set.size() != so_far_the_best_score.num_inliers_by_type(i))
+			{
+				diff_inlier_nums = true;
+				break;
+			}
+		}
+		if (diff_inlier_nums)
+		{
 			so_far_the_best_score = scoring_function->getScore(
-				points_, // All points
-				so_far_the_best_model, // Best model parameters
-				model_estimator, // The estimator
-				settings.threshold, // The inlier-outlier threshold
-				temp_inner_inliers[inlier_container_offset] // The current inliers
+				points_, so_far_the_best_model, model_estimator,
+				settings.threshold, temp_inner_inliers[inlier_container_offset]
 			);
+		}
 
 		// Apply iteration least-squares fitting to get the final model parameters if needed
 		bool iterative_refitting_applied = false;
 		if (settings.do_final_iterated_least_squares)
 		{
-			Model model = so_far_the_best_model; // The model which is re-estimated by iteratively re-weighted least-squares
+			// The model which is re-estimated by iteratively re-weighted least-squares
+			Model model = so_far_the_best_model;
 			bool success = iteratedLeastSquaresFitting(
-				points_, // The input data points
-				model_estimator, // The model estimator
-				settings.threshold, // The inlier-outlier threshold
-				temp_inner_inliers[inlier_container_offset], // The resulting inlier set
-				model // The estimated model
+				points_, model_estimator, settings.threshold,
+				temp_inner_inliers[inlier_container_offset], model
 			);
 
 			if (success)
@@ -592,11 +612,8 @@ public:
 					inlier_set.clear();
 				}
 				current_score = scoring_function->getScore(
-					points_, // All points
-					model, // Best model parameters
-					model_estimator, // The estimator
-					settings.threshold, // The inlier-outlier threshold
-					temp_inner_inliers[inlier_container_idx] // The current inliers
+					points_, model, model_estimator, settings.threshold,
+					temp_inner_inliers[inlier_container_idx]
 				);
 
 				if (so_far_the_best_score < current_score)
@@ -613,9 +630,7 @@ public:
 			// Estimate the final model using the full inlier set
 			models.clear();
 			model_estimator.estimateModelNonminimal(
-				points_,
-				temp_inner_inliers[inlier_container_offset],
-				models
+				points_, temp_inner_inliers[inlier_container_offset], models
 			);
 
 			// Selecting the best model by their scores
@@ -626,13 +641,23 @@ public:
 				{
 					inlier_set.clear();
 				}
-				current_score = scoring_function->getScore(
-					points_, // All points
-					model, // Best model parameters
-					model_estimator, // The estimator
-					settings.threshold, // The inlier-outlier threshold
-					temp_inner_inliers[inlier_container_idx]
-				);
+				// TODO remote try-catch block
+				try
+				{
+					current_score = scoring_function->getScore(
+						points_, model, model_estimator, settings.threshold,
+						temp_inner_inliers[inlier_container_idx]
+					);
+				}
+				catch (const std::exception& e)
+				{
+					std::vector<Model> dummy_models;
+					model_estimator.estimateModelNonminimal(
+						points_, temp_inner_inliers[inlier_container_offset],
+						dummy_models
+					);
+					std::cout << e.what() << std::endl;
+				}
 
 				if (so_far_the_best_score < current_score)
 				{
@@ -640,11 +665,13 @@ public:
 					inlier_container_offset = inlier_container_idx;
 				}
 			}
-
-			if (models.size() == 0)
-			{
-				so_far_the_best_model = models[0]; // TODO won't this cause a segfault?
-			} 
+			// if (models.size() == 0)
+			// {
+			// 	// TODO won't this cause a segfault?
+			// 	// It did after models[0] was changed to models.at(0), meaning
+			// 	// the best model was simply overridden by garbage
+			// 	so_far_the_best_model = models.at(0);
+			// } 
 		}
 
 		// Return the inlier set and the estimated model parameters
@@ -659,10 +686,10 @@ public:
 
 	// The main method applying Graph-Cut RANSAC to the input data points
 	void run(
-		const cv::Mat &points_,  // Data points
-		const _ModelEstimator &model_estimator, // The model estimator
-		const _NeighborhoodGraph *neighborhood_graph_, // The initialized neighborhood graph
-		Model &obtained_model_ // The output model
+		const DataType& points_,  // Data points
+		const _ModelEstimator& model_estimator, // The model estimator
+		const _NeighborhoodGraph* neighborhood_graph_, // The initialized neighborhood graph
+		Model& obtained_model_ // The output model
 	)
 	{
 		// Instantiate the preemptive model verification strategy
@@ -672,8 +699,8 @@ public:
 		_FastInlierSelector fast_inlier_selector(neighborhood_graph_);
 
 		// Running GC-RANSAC by using the specified preemptive verification
-		run(points_, model_estimator, neighborhood_graph_, obtained_model_, 
-			preemptive_verification, fast_inlier_selector);
+		run(points_, model_estimator, neighborhood_graph_, obtained_model_,
+		    preemptive_verification, fast_inlier_selector);
 	}
 
 	void setFPS(double fps_)
@@ -697,7 +724,7 @@ public:
 protected:
 	double time_limit; // The desired time limit
 	utils::RANSACStatistics<ResidualDimension> statistics; // RANSAC statistics
-	size_t point_number; // The point number
+	SampleSizeType point_number; // The point number
 	ResidualType truncated_thresholds; // 3 / 2 * threshold_
 	ResidualType squared_truncated_thresholds; // 9 / 4 * threshold_^2
 	int step_size; // Step size per processes
@@ -714,10 +741,10 @@ protected:
 	) const
 	{
 		double q = 1.0;
-		const auto inv_point_num = 1.0 / static_cast<double>(point_number);
 		for (size_t i = 0; i < ResidualDimension; i++)
 		{
-			const auto inlier_ratio = inv_point_num * static_cast<double>(inlier_numbers[i]);
+			const auto inlier_ratio = static_cast<double>(inlier_numbers[i]) /
+									  static_cast<double>(point_number[i]);
 			q *= std::pow(inlier_ratio, static_cast<double>(samples_sizes[i]));
 		}
 		const auto log2 = std::log(1 - q);
@@ -763,8 +790,8 @@ protected:
 		{
 			// Calculating the point-to-model squared residual
 			double sqr_residual = model_estimator.squaredResidual(
-				points_.row(i), model_
-			)[0];
+				0, points_.row(i), model_
+			);
 			// Storing the residual divided by the squared threshold
 			const auto& quad_cost = distance_per_threshold.emplace_back(
 				std::clamp(sqr_residual / sqr_truncated_thresh, 0.0, 1.0)
@@ -842,13 +869,76 @@ protected:
 		delete problem_graph;
 	}
 
+	ResidualType meanSquaredResiduals(
+		const DataType& points,
+		const InlierContainerType& inliers,
+		const Model& model,
+		const _ModelEstimator& model_estimator
+	) const
+	{
+		ResidualType mean;
+		for (size_t i = 0; i < ResidualDimension; i++)
+		{ 
+			mean(i) = 0.0;
+			for (const auto& inlier_idx : inliers[i])
+			{
+				// TODO optimize by allowing computation of each residual type
+				// separately to avoid re-computation of squared residuals.
+				auto sqr_residual = model_estimator.squaredResidual(
+					i, points[i]->row(inlier_idx), model
+				);
+				mean(i) += sqr_residual;
+			}
+			mean(i) /= static_cast<double>(inliers[i].size());
+		}
+		return mean;
+	}
+
+	void verifyNonIncreasingSquaredResidualMeans(
+		const DataType& points,
+		const InlierContainerType& prev_best_inliers,
+		const Model& prev_best_model,
+		const InlierContainerType& curr_best_inliers,
+		const Model& curr_best_model,
+		const _ModelEstimator& model_estimator,
+		const std::string& calling_func
+	) const
+	{
+		// compute the mean of squared residuals in the previously best model.
+		const auto before_sqr_residuals_mean = meanSquaredResiduals(
+			points, prev_best_inliers, prev_best_model, model_estimator
+		);
+		// compute the mean of squared residuals in the updated best model.
+		const auto after_sqr_residuals_mean = meanSquaredResiduals(
+			points, curr_best_inliers, curr_best_model, model_estimator
+		);
+		// check if mean of squared residuals in non-increasing.
+		// Otherwise, report which type increased following graphCutLocalOptimization.
+		Eigen::Array<bool, ResidualDimension, 1> increasing_residual_means =
+			after_sqr_residuals_mean > before_sqr_residuals_mean;
+		
+		if (!increasing_residual_means.any())
+		{
+			return;
+		}
+
+		std::cout << "Mean of squared residuals increased after call to " << calling_func << ":\n";
+		for (size_t i = 0; i < ResidualDimension; i++)
+		{
+			std::cout << "\tResidual #" << i << ":\n"
+					  << "\t\tStatus: " << (increasing_residual_means(i) ? "increasing" : "non-increasing") << "\n"
+					  << "\t\tBefore: " << before_sqr_residuals_mean(i) << "\n"
+					  << "\t\tAfter: " << after_sqr_residuals_mean(i) << "\n"; 
+		}
+	}
+
 	// Apply the graph-cut optimization for GC-RANSAC
 	bool graphCutLocalOptimization(
-		const cv::Mat &points_, // The input data points
+		const DataType& points_, // The input data points
 		InlierContainerType& so_far_the_best_inliers, // The input, than the resulting inlier set
-		Model &so_far_the_best_model_, // The current model
-		ScoreType &so_far_the_best_score, // The current score
-		const _ModelEstimator &model_estimator, // The model estimator
+		Model& so_far_the_best_model_, // The current model
+		ScoreType& so_far_the_best_score, // The current score
+		const _ModelEstimator& model_estimator, // The model estimator
 		const size_t trial_number_ // The max trial number
 	)
 	{
@@ -862,9 +952,9 @@ protected:
 		InlierContainerType current_sample{}; // The current sample used in the inner RANSAC
 		SampleSizeType sample_size{};
 		
-		const auto n_points = static_cast<size_t>(points_.rows);
 		for (size_t i = 0; i < ResidualDimension; i++)
 		{
+			const auto n_points = static_cast<size_t>(points_[i]->rows);
 			inliers[i].reserve(n_points);
 			best_inliers[i].reserve(n_points);
 			tmp_inliers[i].reserve(n_points);
@@ -896,25 +986,19 @@ protected:
 				// TODO this is for non-scalar residuals and thresholds.
 				// Right now this works only when lambda_ = 0.
 				using namespace Eigen;
-				for (size_t point_idx = 0; point_idx < n_points; point_idx++)
+				for (size_t i = 0; i < ResidualDimension; i++)
 				{
-					const auto sqr_residuals = model_estimator.squaredResidual(
-						points_.row(point_idx), best_model
-					);
-					Array<bool, ResidualDimension, 1> comparison = sqr_residuals <= squared_truncated_thresholds;
-					// construct weights matrix such that inliers only contribute
-					// constraints for the residuals below the corresponding
-					// thresholds.
-					for (size_t i = 0; i < ResidualDimension; i++)
+					const auto n_points = static_cast<size_t>(points_[i]->rows);
+					for (size_t point_idx = 0; point_idx < n_points; point_idx++)
 					{
-						if (comparison(i))
+						auto sqr_residual = model_estimator.squaredResidual(
+							i, points_[i]->row(point_idx), best_model
+						);
+						if (sqr_residual <= squared_truncated_thresholds(i))
 						{
 							inliers[i].emplace_back(point_idx);
 						}
 					}
-				}
-				for (size_t i = 0; i < ResidualDimension; i++)
-				{
 					inliers[i].shrink_to_fit();
 					sample_size[i] = inliers[i].size();
 				}
@@ -922,7 +1006,7 @@ protected:
 			else
 			{
 				labeling(
-					points_, // The input points
+					*(points_[0].get()), // The input points
 					statistics.neighbor_number, // The number of neighbors, i.e. the edge number of the graph 
 					best_model, // The best model parameters
 					model_estimator, // The model estimator
@@ -992,11 +1076,24 @@ protected:
 						inlier_subset.clear();
 					}
 
-					// Calculate the score of the current model
-					ScoreType score = scoring_function->getScore(
-						points_, model, model_estimator, settings.threshold,
-						tmp_inliers
-					);
+					// TODO remote try-catch block
+					ScoreType score;
+					try
+					{
+						// Calculate the score of the current model
+						score = scoring_function->getScore(
+							points_, model, model_estimator, settings.threshold,
+							tmp_inliers
+						);
+					}
+					catch (const std::exception& e)
+					{
+						std::vector<Model> dummy_models;
+						model_estimator.estimateModelNonminimal(
+							points_, current_sample, dummy_models
+						);
+						std::cout << e.what() << std::endl;
+					}
 
 					// If this model is better than the previous best, update.
 					if (max_score < score) // Comparing the so-far-the-best model's score and current model's score
@@ -1019,6 +1116,11 @@ protected:
 		// If the new best score is better than the original one, update the model parameters.
 		if (so_far_the_best_score < max_score) // Comparing the original best score and best score of the local optimization
 		{
+			// verifyNonIncreasingSquaredResidualMeans(
+			// 	points_, so_far_the_best_inliers, so_far_the_best_model_,
+			// 	best_inliers, best_model, model_estimator, 
+			// 	"graphCutLocalOptimization"
+			// );
 			so_far_the_best_score = max_score; // Store the new best score
 			so_far_the_best_model_ = best_model;
 			so_far_the_best_inliers.swap(best_inliers);
@@ -1028,37 +1130,35 @@ protected:
 	}
 
 	void iteratedLeastSquaresComputeWeights(
-		const cv::Mat& points,
+		const DataType& points,
 		const _ModelEstimator& model_estimator,
 		const InlierContainerType& inliers,
 		const Model& model,
 		WeightType& weights
 	) const 
 	{
-		const auto n_weights = static_cast<size_t>(points.rows);
 		for (size_t i = 0; i < ResidualDimension; i++)
 		{
-			auto& weights_i = weights[i];
-			weights_i = std::vector<double>(n_weights, 0.0);
-			const auto& inliers_i = inliers[i];
-			const auto inv_thresh_i = 1.0 / squared_truncated_thresholds(i);
+			auto n_weights = static_cast<size_t>(points[i]->rows);
+			weights[i] = std::vector<double>(n_weights, 0.0);
+			auto inv_thresh_i = 1.0 / squared_truncated_thresholds(i);
 
-			for (const auto& point_idx : inliers_i)
+			for (const auto& point_idx : inliers[i])
 			{
 				// The squares residual of the current inlier
-				const auto squared_residual = model_estimator.squaredResidual(
-					points.row(point_idx), model
+				auto squared_residual = model_estimator.squaredResidual(
+					i, points[i]->row(point_idx), model
 				);
 				// Calculate the Tukey bisquare weights
-				auto weight = 1.0 - (squared_residual(i) * inv_thresh_i);
+				auto weight = 1.0 - (squared_residual * inv_thresh_i);
 				weight = std::max(0.0, weight);
-				weights_i[point_idx] = weight * weight;
+				weights[i][point_idx] = weight * weight;
 			}
 		}
 	}
 
 	void iteratedLeastSquaresModelFitting(
-		const cv::Mat& points,
+		const DataType& points,
 		const _ModelEstimator& model_estimator,
 		const InlierContainerType& inliers,
 		const Model& current_model,
@@ -1080,7 +1180,7 @@ protected:
 	}
 
 	bool iteratedLeastSquaresFitting(
-		const cv::Mat& points,
+		const DataType& points,
 		const _ModelEstimator& model_estimator,
 		const ResidualType& thresholds,
 		InlierContainerType& inliers,
@@ -1112,9 +1212,24 @@ protected:
 			{
 				// Calculate the score of the current model
 				InlierContainerType tmp_inliers; // Inliers of the current model
-				ScoreType score = scoring_function->getScore(
-					points, models[0], model_estimator, thresholds, tmp_inliers
-				);
+				// TODO remove try-catch block
+				ScoreType score;
+				try
+				{
+					score = scoring_function->getScore(
+						points, models[0], model_estimator, thresholds,
+						tmp_inliers
+					);
+				}
+				catch(const std::exception& e)
+				{
+					std::vector<Model> dummy_models;
+					iteratedLeastSquaresModelFitting(
+						points, model_estimator, inliers, current_model,
+						dummy_models
+					);
+					std::cout << e.what() << std::endl;
+				}
 				
 				// Break if the are not enough inliers
 				if (isSampleSubMinimal(model_estimator, score.inlier_num_array()))
@@ -1182,6 +1297,11 @@ protected:
 					// Update the model if its score is higher than that of the current best
 					if (score > best_score)
 					{
+						verifyNonIncreasingSquaredResidualMeans(
+							points, inliers, current_model, tmp_inliers,
+							cand_model, model_estimator, 
+							"iteratedLeastSquaresFitting"
+						);
 						updated = true; // Set a flag saying that the model is updated, so the process should continue
 						best_score = score; // Store the new score
 						current_model = cand_model; // Store the new model

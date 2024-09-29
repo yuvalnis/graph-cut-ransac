@@ -11,7 +11,10 @@
 constexpr size_t kFeatureSize{3};
 constexpr size_t kMaxEntriesToPrint{10};
 
-std::vector<double> parse_input(const std::string& input) {
+size_t parse_input(const std::string& input, size_t block_size,
+				   std::vector<double>& result
+)
+{
     // Remove curly braces from the input string
     std::string cleaned_input = input;
     cleaned_input.erase(std::remove(cleaned_input.begin(), cleaned_input.end(), '{'), cleaned_input.end());
@@ -20,24 +23,50 @@ std::vector<double> parse_input(const std::string& input) {
     // Create a string stream to process the input
     std::stringstream ss(cleaned_input);
     std::string temp;
-    std::vector<double> result;
 
     // Split the input by commas and convert to double
+	result.clear();
     while (std::getline(ss, temp, ',')) {
         result.push_back(std::stod(temp));  // Convert each part to double
     }
 
-    return result;
+	// Check the result is the correct size
+	if (result.size() % block_size != 0)
+	{
+		std::cout << "Error: the size of the input vector ("
+				  << result.size() << ") is not a multiple of "
+				  << block_size << ".\n";
+		return 0;
+	}
+	const size_t n_blocks = result.size() / block_size;
+
+    // Output the parsed vector
+    std::cout << n_blocks << "-by-" << block_size << " matrix:\n";
+	size_t i = 0;
+	for (; i < std::min(n_blocks, kMaxEntriesToPrint); i++)
+	{
+		for (size_t j = 0; j < block_size; j++)
+		{
+			std::cout << result.at(i * block_size + j) << " ";
+		}
+		std::cout << "\n";
+	}
+	if (i < n_blocks)
+	{
+		std::cout << "...\n";
+	}
+    std::cout << std::endl;
+
+	return n_blocks;
 }
 
 int main(int argc, char* argv[])
 {
-	if (argc < 3 || argc > 4)
+	if (argc != 3)
 	{	
 		std::cout << "Usage: " << argv[0]
 				  << " scale_thresh"
 				  << " features"
-				  << " [weights]"
 				  << "\n";
 		return -1;
 	}
@@ -54,64 +83,12 @@ int main(int argc, char* argv[])
 	// Parse the input features into a vector of doubles
 	std::cout << "Parsing features...\n";
 	std::string input = argv[2];
-    std::vector<double> features = parse_input(input);
-	if (features.size() % kFeatureSize != 0)
+    std::vector<double> features;
+	const auto n_features = parse_input(input, kFeatureSize, features);
+	if (n_features == 0)
 	{
-		std::cout << "Error: the size of the input feature vector ("
-				  << features.size() << ") is not a multiple of "
-				  << kFeatureSize << ".\n";
 		return -1;
 	}
-	const size_t n_features = features.size() / kFeatureSize;
-    // Output the parsed vector
-    std::cout << n_features << "-by-" << kFeatureSize << " feature matrix:\n";
-	size_t i = 0;
-	for (; i < std::min(n_features, kMaxEntriesToPrint); i++)
-	{
-		for (size_t j = 0; j < kFeatureSize; j++)
-		{
-			std::cout << features.at(i * kFeatureSize + j) << " ";
-		}
-		std::cout << "\n";
-	}
-	if (i < n_features)
-	{
-		std::cout << "...\n";
-	}
-    std::cout << std::endl;
-
-	// Parse the input weights into a vector of doubles
-	std::cout << "Parsing weights...\n";
-	std::vector<double> weights{};
-	weights.reserve(n_features);
-	if (argc == 4)
-	{
-		input = argv[3];
-    	weights = parse_input(input);
-	}
-	else
-	{
-		weights = std::vector<double>(n_features, 1.0);
-	}
-	if (weights.size() != n_features)
-	{
-		std::cout << "Error: the size of the input weights vector ("
-				  << weights.size() << ") does not equal the number of features "
-				  << kFeatureSize << ".\n";
-		return -1;
-	}
-	// Output the parsed vector
-    std::cout << n_features << "-by-" << kFeatureSize << " feature matrix:\n";
-	i = 0;
-	for (; i < std::min(n_features, kMaxEntriesToPrint); i++)
-	{
-		std::cout << weights.at(i) << "\n";
-	}
-	if (i < n_features)
-	{
-		std::cout << "...\n";
-	}
-    std::cout << std::endl;
 
 	const double spatial_coherence_weight = 0;
 	const size_t min_iteration_number = 10000;
@@ -122,7 +99,7 @@ int main(int argc, char* argv[])
     std::vector<double> homography(9);
 
 	findRectifyingHomographyScaleOnly_(
-		features, weights, scale_residual_thresh,
+		features, scale_residual_thresh,
 		spatial_coherence_weight,
 		min_iteration_number, max_iteration_number,
 		max_local_optimization_number, inliers, homography, /*verbose_level=*/1

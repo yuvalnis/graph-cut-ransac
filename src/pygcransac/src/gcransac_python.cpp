@@ -15,16 +15,29 @@
 
 using namespace gcransac;
 
+bool validVectorSize(const std::vector<double>& vec, size_t col_size)
+{
+	if (vec.empty() || vec.size() % col_size != 0)
+	{
+		fprintf(stderr,
+			"The container of features should have a non-zero size which "
+			"is a multiple of %lu. Its size is %lu.\n",
+			col_size, vec.size()
+		);
+		return false;
+	}
+	return true;
+}
+
 int findRectifyingHomographyScaleOnly_(
-	const std::vector<double>& features,	// input SIFT features
-	const std::vector<double>& weights,	// input SIFT feature weights
-	double scale_residual_thresh, // threshold for inlier selection
+	const std::vector<double>& features,
+	double scale_residual_thresh,
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
 	size_t max_iteration_number,
 	size_t max_local_optimization_number,
-	std::vector<bool>& inliers,	// output inlier boolean mask
-	std::vector<double>& homography, // output homography
+	std::vector<bool>& inliers,
+	std::vector<double>& homography,
 	unsigned int verbose_level
 )
 {
@@ -33,30 +46,16 @@ int findRectifyingHomographyScaleOnly_(
 
 	constexpr size_t kFeatureSize = 3;	// each SIFT feature contains a 2D-coordinate and scale
 
-	if (features.empty() || features.size() % kFeatureSize != 0)
+	if (!validVectorSize(features, kFeatureSize))
 	{
-		fprintf(stderr,
-			"The container of SIFT features should have a non-zero size which "
-			"is a multiple of %lu. Its size is %lu.\n",
-			kFeatureSize, features.size()
-		);
 		return 0;
 	}
-
 	const auto num_features = features.size() / kFeatureSize; 
-	if (num_features != weights.size())
-	{
-		fprintf(
-			stderr,
-			"The number of weights (%lu) is different than the number of "
-			"features (%lu).\n",
-			weights.size(), num_features
-		);
-		return 0;
-	}
 
-	cv::Mat sample_set(num_features, kFeatureSize, CV_64F);
-	std::memcpy(sample_set.data, features.data(), features.size() * sizeof(double));
+	std::unique_ptr<cv::Mat> features_ptr = std::make_unique<cv::Mat>(
+		num_features, kFeatureSize, CV_64F
+	);
+	std::memcpy(features_ptr->data, features.data(), features.size() * sizeof(double));
 
 	// initialize neighborhood graph
 	// Using only the point coordinates and not the affine elements when constructing the neighborhood.
@@ -85,8 +84,11 @@ int findRectifyingHomographyScaleOnly_(
 	gcransac.settings.do_final_iterated_least_squares = true;
 
 	ScaleBasedRectifyingHomography model;
+	GCRANSAC<ModelEstimator, NeighborhoodGraph>::DataType data{
+		std::move(features_ptr)
+	};
 	gcransac.run(
-		sample_set, estimator, neighborhood_graph.get(), model,
+		data, estimator, neighborhood_graph.get(), model,
 		preemptive_verification, inlier_selector
 	);
 	const auto& statistics = gcransac.getRansacStatistics();
@@ -122,12 +124,12 @@ int findRectifyingHomographyScaleOnly_(
 		{
 			for (size_t i = 0; i < num_features; i++)
 			{
-				double x = features[i * kFeatureSize + 0];
-				double y = features[i * kFeatureSize + 1];
-				double s = features[i * kFeatureSize + 2];
+				double x = data[0]->at<double>(i, 0);
+				double y = data[0]->at<double>(i, 1);
+				double s = data[0]->at<double>(i, 2);
 				model.normalizeFeature(x, y, s);
-				double dummy = 0.0;
-				model.rectifyFeature(x, y, dummy, s);
+				model.rectifiedScale(x, y, s);
+				model.rectifyPoint(x, y);
 				model.denormalizeFeature(x, y, s);
 				std::cout << "#" << i << ":\n"
 						<< "\tInlier: " << (inliers[i] ? "true" : "false") << "\n"
@@ -140,9 +142,9 @@ int findRectifyingHomographyScaleOnly_(
 }
 
 int findRectifyingHomographySIFT_(
-	const std::vector<double>& features, // input SIFT features
-	const std::vector<double>& weights, // input SIFT feature weights
-	double scale_residual_thresh, // threshold for inlier selection
+	const std::vector<double>& scale_features,
+	const std::vector<double>& orientation_features,
+	double scale_residual_thresh,
 	double orientation_residual_thresh,
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
@@ -158,31 +160,28 @@ int findRectifyingHomographySIFT_(
 	using namespace neighborhood;
 	using ModelEstimator = utils::SIFTBasedRectifyingHomographyEstimator;
 
-	constexpr size_t kFeatureSize = 4;
+	constexpr size_t kFeatureSize = 3;
 	
-	if (features.empty() || features.size() % kFeatureSize != 0)
+	if (!validVectorSize(scale_features, kFeatureSize) ||
+	    !validVectorSize(orientation_features, kFeatureSize)
+	)
 	{
-		fprintf(stderr,
-			"The container of SIFT features should have a non-zero size which "
-            "is a multiple of %lu. Its size is %lu.\n",
-			kFeatureSize, features.size()
-		);
 		return 0;
 	}
 
-	const auto num_features = features.size() / kFeatureSize;
-	if (num_features != weights.size())
-	{
-		fprintf(stderr,
-			"The number of weights (%lu) is different than the number of "
-			"features (%lu).\n",
-			weights.size(), num_features
-		);
-		return 0;
-	}
+	const auto num_scale_features = scale_features.size() / kFeatureSize;
+	std::unique_ptr<cv::Mat> scale_features_ptr = std::make_unique<cv::Mat>(
+		num_scale_features, kFeatureSize, CV_64F
+	);
+	std::memcpy(scale_features_ptr->data, scale_features.data(),
+				scale_features.size() * sizeof(double));
 
-	cv::Mat sample_set(num_features, kFeatureSize, CV_64F);
-	std::memcpy(sample_set.data, features.data(), features.size() * sizeof(double));
+	const auto num_orientation_features = orientation_features.size() / kFeatureSize;
+	std::unique_ptr<cv::Mat> orientation_features_ptr = std::make_unique<cv::Mat>(
+		num_orientation_features, kFeatureSize, CV_64F
+	);
+	std::memcpy(orientation_features_ptr->data, orientation_features.data(),
+				orientation_features.size() * sizeof(double));
 
     // initialize neighborhood graph
 	cv::Mat empty_point_matrix(0, kFeatureSize, CV_64F);
@@ -199,13 +198,7 @@ int findRectifyingHomographySIFT_(
 		ModelEstimator, NeighborhoodGraph
 	> inlier_selector(neighborhood_graph.get());
 
-	GCRANSAC<
-		ModelEstimator,
-		NeighborhoodGraph,
-		MSACScoringFunction<ModelEstimator>,
-		preemption::EmptyPreemptiveVerfication<ModelEstimator>,
-		inlier_selector::EmptyInlierSelector<ModelEstimator, NeighborhoodGraph>
-	> gcransac;
+	GCRANSAC<ModelEstimator, NeighborhoodGraph> gcransac;
 	gcransac.settings.threshold(0) = scale_residual_thresh;
 	gcransac.settings.threshold(1) = orientation_residual_thresh;
 	gcransac.settings.do_local_optimization = true; 
@@ -216,8 +209,11 @@ int findRectifyingHomographySIFT_(
 	gcransac.settings.do_final_iterated_least_squares = true;
 
 	SIFTRectifyingHomography model;
+	GCRANSAC<ModelEstimator, NeighborhoodGraph>::DataType data{
+		std::move(scale_features_ptr), std::move(orientation_features_ptr)
+	};
 	gcransac.run(
-		sample_set, estimator, neighborhood_graph.get(), model,
+		data, estimator, neighborhood_graph.get(), model,
 		preemptive_verification, inlier_selector
 	);
 	const auto& statistics = gcransac.getRansacStatistics();
@@ -252,13 +248,13 @@ int findRectifyingHomographySIFT_(
 		vanishing_points[2 * i + 1] = vp2(i);
 	}
 	// create a boolean mask of the scale inliers
-    scale_inliers.resize(num_features, false);
+    scale_inliers.resize(num_scale_features, false);
 	const auto num_scale_inliers = statistics.inliers[0].size();
 	for (size_t pt_idx = 0; pt_idx < num_scale_inliers; ++pt_idx) {
 		scale_inliers[statistics.inliers[0][pt_idx]] = true;
 	}
 	// create a boolean mask of the orientation inliers
-	orientation_inliers.resize(num_features, false);
+	orientation_inliers.resize(num_orientation_features, false);
 	const auto num_orientation_inliers = statistics.inliers[1].size();
 	for (size_t pt_idx = 0; pt_idx < num_orientation_inliers; ++pt_idx) {
 		orientation_inliers[statistics.inliers[1][pt_idx]] = true;
@@ -266,34 +262,63 @@ int findRectifyingHomographySIFT_(
 
 	if (verbose_level > 0)
 	{
+		if (std::abs(vp1[2]) > 1e-6)
+		{
+			vp1 /= vp1[2];
+		}
+		if (std::abs(vp2[2]) > 1e-6)
+		{
+			vp2 /= vp2[2];
+		}
 		std::cout << "\nFinal model:\n"
 				  << "\nh7: " << model.h7 << ", h8: " << model.h8 << ", alpha: " << model.alpha << "\n"
 				  << "\nx0: " << model.x0 << ", y0: " << model.y0 << ", s: " << model.s << "\n"
 				  << "\nHomography:\n"
 				  << H << "\n\n"
-				  << "first vanishing point (unnormalized): " << vp1.transpose() << "\n"
-				  << "second vanishing point (unnormalized): " << vp2.transpose() << "\n"
+				  << "Rectified image vanishing point #1 direction: "
+			  	  << (model.vanishing_point_dir1 * 180.0 * M_1_PI) << std::endl
+				  << "Rectified image vanishing point #2 direction: "
+			      << (model.vanishing_point_dir2 * 180.0 * M_1_PI) << std::endl
+				  << "first vanishing point (normalized): " << vp1.transpose() << "\n"
+				  << "second vanishing point (normalized): " << vp2.transpose() << "\n"
 				  << "Number of scale-inliers: " << num_scale_inliers << "\n"
-				  << "Number of orientation-inliers: " << num_orientation_inliers << "\n"
-				  << "\n"
-				  << "Estimated rectified features:\n";
+				  << "Number of orientation-inliers: " << num_orientation_inliers
+				  << "\n\n";
 
 		if (verbose_level > 1)
 		{
-			for (size_t i = 0; i < num_features; i++)
+			// print rectified scale features
+			std::cout << "Estimated rectified scale features:\n";
+			for (size_t i = 0; i < num_scale_features; i++)
 			{
-				double x = features[i * kFeatureSize + 0];
-				double y = features[i * kFeatureSize + 1];
-				double t = features[i * kFeatureSize + 2];
-				double s = features[i * kFeatureSize + 3];
+				double x = data[0]->at<double>(i, 0);
+				double y = data[0]->at<double>(i, 1);
+				double s = data[0]->at<double>(i, 2);
 				model.normalizeFeature(x, y, s);
-				model.rectifyFeature(x, y, t, s);
+				model.rectifiedScale(x, y, s);
+				model.rectifyPoint(x, y);
 				model.denormalizeFeature(x, y, s);
 				std::cout << "#" << i << ":\n"
-						<< "\tScale-inlier: " << (scale_inliers[i] ? "true" : "false") << ", "
-						<< "\tOrientation-inlier: " << (orientation_inliers[i] ? "true" : "false") << "\n"
-						<< "\tRectified feature: (" << x << ", " << y << ", " << (180.0 * M_1_PI * t) << ", " << s << ")\n";
+						  << "\tInlier: " << (scale_inliers[i] ? "true" : "false") << "\n"
+						  << "\tRectified feature: (" << x << ", " << y << ", " << s << ")\n";
 			}
+			std::cout << std::endl;
+			// print rectified orientation features
+			std::cout << "Estimated rectified orientation features:\n";
+			for (size_t i = 0; i < num_scale_features; i++)
+			{
+				double x = data[1]->at<double>(i, 0);
+				double y = data[1]->at<double>(i, 1);
+				double t = data[1]->at<double>(i, 2);
+				model.normalize(x, y);
+				model.rectifiedAngle(x, y, t);
+				model.rectifyPoint(x, y);
+				model.denormalize(x, y);
+				std::cout << "#" << i << ":\n"
+						  << "\tInlier: " << (orientation_inliers[i] ? "true" : "false") << "\n"
+						  << "\tRectified feature: (" << x << ", " << y << ", " << (180.0 * M_1_PI * t) << ")\n";
+			}
+			std::cout << std::endl;
 		}
 	}
 

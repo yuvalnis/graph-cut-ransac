@@ -21,11 +21,12 @@ public:
 	using Model = typename Estimator::Model;
 	using InlierContainerType = typename Estimator::InlierContainerType;
 	using ThresholdType = typename Estimator::ResidualType;
+	using DataType = typename Estimator::DataType;
 
 	virtual ~ScoringFunction() = 0;
 
 	virtual ScoreType getScore(
-		const cv::Mat &data, // The input data points
+		const DataType &data, // The input data points
 		const Model &model, // The current model parameters
 		const Estimator &estimator, // The model estimator
 		const ThresholdType& thresholds,

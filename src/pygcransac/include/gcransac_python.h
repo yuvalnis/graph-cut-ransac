@@ -4,9 +4,8 @@
 #include <cstddef>
 
 int findRectifyingHomographyScaleOnly_(
-	const std::vector<double>& features,	// input SIFT features
-	const std::vector<double>& weights,	// input SIFT feature weights
-	double scale_residual_thresh, // threshold for inlier selection
+	const std::vector<double>& features,
+	double scale_residual_thresh,
 	double spatial_coherence_weight,
 	size_t min_iteration_number,
 	size_t max_iteration_number,
@@ -17,9 +16,9 @@ int findRectifyingHomographyScaleOnly_(
 );
 
 int findRectifyingHomographySIFT_(
-	const std::vector<double>& features,	// input SIFT features
-	const std::vector<double>& weights,	// input SIFT feature weights
-	double scale_residual_thresh, // thresholds for inlier selection
+	const std::vector<double>& scale_features,
+	const std::vector<double>& orientation_features,
+	double scale_residual_thresh,
 	double orientation_residual_thresh,
 	double spatial_coherence_weight, // the spatial coherence weight used in the local optimization
 	size_t min_iteration_number, // minimum iteration number. value equal or higher to 50 is recommended

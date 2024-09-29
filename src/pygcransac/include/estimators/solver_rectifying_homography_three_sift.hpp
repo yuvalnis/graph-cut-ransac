@@ -3,6 +3,7 @@
 #include <vector>
 #include <optional>
 #include <cmath>
+#include <sstream>
 #include "model.h"
 #include "solver_engine.h"
 #include "math_utils.hpp"
@@ -17,7 +18,8 @@ public:
     using Base = SolverEngine<ScaleBasedRectifyingHomography, 1>;
     using Model = typename Base::Model;
     using InlierContainerType = typename Base::InlierContainerType;
-    using ResidualType = typename Base::ResidualType;
+    using DataType = typename Base::DataType;
+    using MutableDataType = typename Base::MutableDataType;
     using WeightType = typename Base::WeightType;
 
     RectifyingHomographyThreeSIFTSolver() {}
@@ -32,36 +34,47 @@ public:
     );
     
     inline bool isValidSample(
-		const cv::Mat& data,
+		const DataType& data,
 		const InlierContainerType& inliers
 	) const override
 	{
-        return !areAllPointsCollinear(data, inliers[0]);
+        return !areAllPointsCollinear(*(data[0].get()), inliers[0]);
 	}
 
     // Estimate the model parameters from the given point sample
     // using weighted fitting if possible.
     bool estimateModel(
-        const cv::Mat& data, // The set of data points
+        const DataType& data, // The set of data points
         const InlierContainerType& inliers,
         std::vector<ScaleBasedRectifyingHomography>& models, // The estimated model parameters
         const WeightType& weights
     ) const;
 
-    ResidualType residual(
-        const cv::Mat& feature,
+    static double scaleResidual(
+        double x, double y, double s, const ScaleBasedRectifyingHomography& model
+    );
+
+    double residual(
+        size_t type, const cv::Mat& feature,
         const ScaleBasedRectifyingHomography& model
     ) const;
 
-    ResidualType squaredResidual(
-        const cv::Mat& feature,
+    double squaredResidual(
+        size_t type, const cv::Mat& feature,
         const ScaleBasedRectifyingHomography& model
     ) const;
 
-    bool normalizePoints(
+    static bool internalNormalizePoints(
         const cv::Mat& data,
         const std::vector<size_t>& inliers,
         cv::Mat& normalized_features,
+        NormalizingTransform& normalizing_transform
+    );
+
+    bool normalizePoints(
+        const DataType& data,
+        const InlierContainerType& inliers,
+        MutableDataType& normalized_features,
         NormalizingTransform& normalizing_transform
     ) const;
 
@@ -172,17 +185,17 @@ bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
         coeffs(i, 2) = -pow(s, kScalePower);
         coeffs(i, 3) = -1.0;
     }
-    Eigen::Matrix<double, 3, 1> x;
-    gcransac::utils::gaussElimination<3>(coeffs, x);
-    if (x.hasNaN())
+    Eigen::Matrix<double, 3, 1> solution;
+    gcransac::utils::gaussElimination<3>(coeffs, solution);
+    if (solution.hasNaN())
     {
         return false;
     }
     // construct model
     ScaleBasedRectifyingHomography model;
-    model.h7 = x(0);
-    model.h8 = x(1);
-    model.alpha = x(2);
+    model.h7 = solution(0);
+    model.h8 = solution(1);
+    model.alpha = solution(2);
     if (model.alpha < kEpsilon)
     {
         return false;
@@ -233,18 +246,18 @@ bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
         rhs(i) = -w;
     }
     // solve linear least squares system
-    Eigen::Matrix<double, 3, 1> x = coeffs.colPivHouseholderQr().solve(rhs);
+    Eigen::Matrix<double, 3, 1> solution = coeffs.colPivHouseholderQr().solve(rhs);
     // verify validity of solution
-    if (x.hasNaN())
+    if (solution.hasNaN())
     {
         fprintf(stderr, "Invalid solution for the non-minimal model");
         return false;
     }
     // construct model
     ScaleBasedRectifyingHomography model;
-    model.h7 = x(0);
-    model.h8 = x(1);
-    model.alpha = x(2);
+    model.h7 = solution(0);
+    model.h8 = solution(1);
+    model.alpha = solution(2);
     if (model.alpha < kEpsilon)
     {
         return false;
@@ -254,23 +267,24 @@ bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
 }
 
 bool RectifyingHomographyThreeSIFTSolver::estimateModel(
-    const cv::Mat& data, // The set of data points
+    const DataType& data, // The set of data points
     const InlierContainerType& inliers,
     std::vector<ScaleBasedRectifyingHomography>& models, // The estimated model parameters
     const WeightType& weights = WeightType{}
 ) const
 {
-    if (inliers.size() != 1 || weights.size() != 1)
+    if (data.size() != 1 || inliers.size() != 1 || weights.size() != 1)
     {
         fprintf(
             stderr,
-            "The wrong number of inlier sets or weights sets was given. "
-            "Expected 1 inlier set and 1 weight set. "
-            "Received %ld inliers sets and %ld weights sets.\n",
-            inliers.size(), weights.size()
+            "The wrong number of data sets, inlier sets or weights sets was "
+            "given. Expected 1 data set, 1 inlier set and 1 weight set. "
+            "Received %ld data sets, %ld inliers sets and %ld weights sets.\n",
+            data.size(), inliers.size(), weights.size()
         );
         return false;
     }
+    const auto& data_set = *(data[0].get()); // TODO change to use unique_ptr directly
     const auto& inliers_vec = inliers[0];
     const auto sample_size = sampleSize()[0];
     if (inliers_vec.size() < sample_size)
@@ -283,24 +297,22 @@ bool RectifyingHomographyThreeSIFTSolver::estimateModel(
     }
     if (inliers_vec.size() == sample_size)
     {
-        return estimateMinimalModel(data, inliers_vec, models);
+        return estimateMinimalModel(data_set, inliers_vec, models);
     }
     const auto& weights_vec = weights[0];
-    return estimateNonMinimalModel(data, inliers_vec, models, weights_vec);
+    return estimateNonMinimalModel(data_set, inliers_vec, models, weights_vec);
 }
 
-RectifyingHomographyThreeSIFTSolver::ResidualType RectifyingHomographyThreeSIFTSolver::residual(
-    const cv::Mat& feature,
-    const ScaleBasedRectifyingHomography& model
-) const
+double RectifyingHomographyThreeSIFTSolver::scaleResidual(
+    double x, double y, double s, const ScaleBasedRectifyingHomography& model
+)
 {
-    const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
-    Eigen::Vector3d point(feature_ptr[x_pos], feature_ptr[y_pos], 1.0);
-    double scale = feature_ptr[s_pos];
+    Eigen::Vector3d point(x, y, 1.0);
+    double scale = s;
     // Normalize coordinates and scale
     model.normalize(point);
     model.normalizeScale(scale);
-    // Rectify scale.
+    // Rectify  scale
     const auto rectified_scale = model.rectifiedScale(
         point(0), point(1), scale
     );
@@ -308,26 +320,46 @@ RectifyingHomographyThreeSIFTSolver::ResidualType RectifyingHomographyThreeSIFTS
     const auto alpha_cube = std::pow(model.alpha, 3.0);
     // scale-based residual: logarithmic scale difference between the feature's
     // rectified scale and the model's estimated rectified scale for all features.
-    const auto r_scale = std::fabs(std::log(rectified_scale / alpha_cube));
-
-    return ResidualType{r_scale};
+    return std::fabs(std::log(rectified_scale / alpha_cube));
 }
 
-RectifyingHomographyThreeSIFTSolver::ResidualType RectifyingHomographyThreeSIFTSolver::squaredResidual(
-    const cv::Mat& feature,
+double RectifyingHomographyThreeSIFTSolver::residual(
+    size_t type, const cv::Mat& feature,
     const ScaleBasedRectifyingHomography& model
 ) const
 {
-    const auto r = residual(feature, model);
+    if (type != 0)
+    {
+        std::stringstream err_msg;
+        err_msg << "Invalid type argument in class method "
+                << "RectifyingHomographyThreeSIFTSolver::residual. Expected 0, "
+                << "but received " << type << std::endl;
+        throw std::runtime_error(err_msg.str());
+    }
+    const auto r_scale = scaleResidual(
+        feature.at<double>(0, x_pos),
+        feature.at<double>(0, y_pos),
+        feature.at<double>(0, s_pos),
+        model
+    );
+    return r_scale;
+}
+
+double RectifyingHomographyThreeSIFTSolver::squaredResidual(
+    size_t type, const cv::Mat& feature,
+    const ScaleBasedRectifyingHomography& model
+) const
+{
+    const auto r = residual(type, feature, model);
     return r * r;
 }
 
-bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
-    const cv::Mat& data, // The data points
+bool RectifyingHomographyThreeSIFTSolver::internalNormalizePoints(
+    const cv::Mat& data,
     const std::vector<size_t>& inliers,
-    cv::Mat& normalized_features, // The normalized features
-    NormalizingTransform& normalizing_transform // the normalization transformation model
-) const
+    cv::Mat& normalized_features,
+    NormalizingTransform& normalizing_transform
+)
 {
     if (inliers.size() < 1)
     {
@@ -381,28 +413,58 @@ bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
     // and scale as the scaling of feature positions about the origin is isotropic
     auto* norm_features_ptr = reinterpret_cast<double*>(normalized_features.data);
     const auto n_cols = static_cast<size_t>(normalized_features.cols);
+    // for (size_t i = 0; i < inliers.size(); i++)
+    // {
+    //     const auto* feature = get_inlier(i);
+    //     auto norm_x = feature[x_pos]; // x-coordinate
+    //     auto norm_y = feature[y_pos]; // y-coordinate
+    //     auto norm_scale = feature[s_pos]; // scale
+
+    //     normalizing_transform.normalize(norm_x, norm_y);
+    //     normalizing_transform.normalizeScale(norm_scale);
+
+    //     norm_features_ptr[i * n_cols + x_pos] = norm_x;
+    //     norm_features_ptr[i * n_cols + y_pos] = norm_y;
+    //     norm_features_ptr[i * n_cols + s_pos] = norm_scale;
+    //     // ensures that if the dimension of the features is larger
+    //     // than 3, then the normalization will still succeed.
+    //     for (size_t j = feature_size; j < n_cols; j++)
+    //     {
+	// 		norm_features_ptr[i * n_cols + j] = feature[j];
+    //     }
+    // }
+
     for (size_t i = 0; i < inliers.size(); i++)
     {
         const auto* feature = get_inlier(i);
-        auto norm_x = feature[x_pos]; // x-coordinate
-        auto norm_y = feature[y_pos]; // y-coordinate
-        auto norm_scale = feature[s_pos]; // scale
+        norm_features_ptr[i * n_cols + x_pos] = feature[x_pos];
+        norm_features_ptr[i * n_cols + y_pos] = feature[y_pos];
+        norm_features_ptr[i * n_cols + s_pos] = feature[s_pos];
 
-        normalizing_transform.normalize(norm_x, norm_y);
-        normalizing_transform.normalizeScale(norm_scale);
-
-        norm_features_ptr[i * n_cols + x_pos] = norm_x;
-        norm_features_ptr[i * n_cols + y_pos] = norm_y;
-        norm_features_ptr[i * n_cols + s_pos] = norm_scale;
-        // ensures that if the dimension of the features is larger
-        // than 3, then the normalization will still succeed.
         for (size_t j = feature_size; j < n_cols; j++)
         {
 		    norm_features_ptr[i * n_cols + j] = feature[j];
         }
     }
+    normalizing_transform.x0 = 0.0;
+    normalizing_transform.y0 = 0.0;
+    normalizing_transform.s = 1.0;
 
     return true;
+}
+
+bool RectifyingHomographyThreeSIFTSolver::normalizePoints(
+    const DataType& data, // The data points
+    const InlierContainerType& inliers,
+    MutableDataType& normalized_features, // The normalized features
+    NormalizingTransform& normalizing_transform // the normalization transformation model
+) const
+{
+    // TODO change to use unique_ptr directly
+    return internalNormalizePoints(
+        *(data[0].get()), inliers[0], *(normalized_features[0].get()),
+        normalizing_transform
+    );
 }
 
 }

@@ -17,7 +17,8 @@ public:
     using Base = SolverEngine<SIFTRectifyingHomography, 2>;
     using Model = typename Base::Model;
     using InlierContainerType = typename Base::InlierContainerType;
-    using ResidualType = typename Base::ResidualType;
+    using DataType = typename Base::DataType;
+    using MutableDataType = typename Base::MutableDataType;
     using WeightType = typename Base::WeightType;
 
     RectifyingHomographyTwoSIFTSolver() {}
@@ -30,31 +31,39 @@ public:
     }
 
     bool isValidSample(
-		const cv::Mat& data,
+		const DataType& data,
 		const InlierContainerType& inliers
 	) const override;
 
     bool estimateModel(
-        const cv::Mat& data,
+        const DataType& data,
         const InlierContainerType& inliers,
         std::vector<SIFTRectifyingHomography>& models,
         const WeightType& weights = WeightType{}
     ) const;
 
-    ResidualType residual(
-        const cv::Mat& feature,
+    static double scaleResidual(
+        double x, double y, double s, const SIFTRectifyingHomography& model
+    );
+
+    static double orientationResidual(
+        double x, double y, double t, const SIFTRectifyingHomography& model
+    );
+
+    double residual(
+        size_t type, const cv::Mat& feature,
         const SIFTRectifyingHomography& model
     ) const;
 
-    ResidualType squaredResidual(
-        const cv::Mat& feature,
+    double squaredResidual(
+        size_t type, const cv::Mat& feature,
         const SIFTRectifyingHomography& model
     ) const;
 
     bool normalizePoints(
-        const cv::Mat& data,
-        const std::vector<size_t>& inliers,
-        cv::Mat& normalized_features,
+        const DataType& data,
+        const InlierContainerType& inliers,
+        MutableDataType& normalized_features,
         NormalizingTransform& normalizing_transform
     ) const;
 
@@ -64,50 +73,42 @@ protected:
     static constexpr size_t x_pos = 0; // x-coordinate position
     static constexpr size_t y_pos = 1; // y-coordinate position
     static constexpr size_t t_pos = 2; // orientation position
-    static constexpr size_t s_pos = 3; // scale position
-    static constexpr size_t feature_size = 4;
+    static constexpr size_t s_pos = 2; // scale position
+    static constexpr size_t feature_size = 3;
     static constexpr size_t scale_set_idx = 0;
     static constexpr size_t orient_set_idx = 1;
 
     static void setScaleConstraint(
-        const double* feature,
-        const size_t& idx,
+        double x, double y, double scale, size_t row_idx,
         Eigen::Matrix<double, 3, 4>& coeffs
     );
 
     static void setOrientationConstraint(
-        const double* feature1,
-        const double* feature2,
-        const size_t& idx,
-        Eigen::Matrix<double, 3, 4>& coeffs
+        double x1, double y1, double theta1,
+        double x2, double y2, double theta2,
+        size_t row_idx, Eigen::Matrix<double, 3, 4>& coeffs
     );
 
     static void setScaleConstraint(
-        const double* feature,
-        const double& weight,
-        const size_t& idx,
-        Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs,
-        Eigen::VectorXd& rhs
+        double x, double y, double scale, double weight, size_t row_idx, 
+        Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs, Eigen::VectorXd& rhs
     );
 
     static void setOrientationConstraint(
-        const double* feature1,
-        const double* feature2,
-        const double& weight1,
-        const double& weight2,
-        const size_t& idx,
-        Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs,
+        double x1, double y1, double theta1, double weight1,
+        double x2, double y2, double theta2, double weight2,
+        size_t row_idx, Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs,
         Eigen::VectorXd& rhs
     );
 
-    inline static double rectifiedAngle(
-        const double* feature,
-        const SIFTRectifyingHomography& model
+    static double rectifiedAngle(
+        double x, double y, double theta, const SIFTRectifyingHomography& model
     );
 
     bool estimateNonMinimalModel(
-        const cv::Mat &data,
+        const std::unique_ptr<const cv::Mat>& scale_features,
         const std::vector<size_t>& scale_inliers,
+        const std::unique_ptr<const cv::Mat>& orientation_features,
         const std::vector<size_t>& orient_inliers,
         std::vector<SIFTRectifyingHomography>& models,
         const std::vector<double>& scale_weights,
@@ -115,8 +116,9 @@ protected:
     ) const;
 
     bool estimateMinimalModel(
-        const cv::Mat& data,
+        const std::unique_ptr<const cv::Mat>& scale_features,
         const std::vector<size_t>& scale_inliers,
+        const std::unique_ptr<const cv::Mat>& orientation_features,
         const std::vector<size_t>& orient_inliers,
         std::vector<SIFTRectifyingHomography>& models
     ) const;
@@ -146,10 +148,11 @@ double absoluteAngleDiff(const double& angle1, const double& angle2)
 }
 
 bool RectifyingHomographyTwoSIFTSolver::isValidSample(
-    const cv::Mat& data,
+    const DataType& data,
     const InlierContainerType& inliers
 ) const
 {
+    const auto& orient_features = data[orient_set_idx];
     const auto& orient_inliers = inliers[orient_set_idx];
     if (orient_inliers.size() < 2)
     {
@@ -157,19 +160,21 @@ bool RectifyingHomographyTwoSIFTSolver::isValidSample(
         return true;
     }
     // Collect points for convex-hull computation, while computing the minimal
-    // and maximal values in each axis
+    // and maximal values in each axis (the axis-aligned bounding-box of the
+    // convex-hull). Both scale- and orientation- features are detected and so
+    // participate in this part.
     double x_min{DBL_MAX};
     double x_max{DBL_MIN};
     double y_min{DBL_MAX};
     double y_max{DBL_MIN};
     std::vector<utils::Point2D> points;
     points.reserve(inliers[0].size() + inliers[1].size());
-    for (const auto& inlier_set : inliers)
+    for (size_t i = 0; i < ResidualDimension::value; i++)
     {
-        for (const auto& idx : inlier_set)
+        for (const auto& idx : inliers[i])
         {
-            auto x = data.at<double>(idx, x_pos);
-            auto y = data.at<double>(idx, y_pos);
+            auto x = data[i]->at<double>(idx, x_pos);
+            auto y = data[i]->at<double>(idx, y_pos);
             x_min = std::min(x, x_min);
             x_max = std::max(x, x_max);
             y_min = std::min(y, y_min);
@@ -184,21 +189,20 @@ bool RectifyingHomographyTwoSIFTSolver::isValidSample(
     for (size_t i = 0; i < orient_inliers.size() - 1; i++)
     {
         auto idx_i = orient_inliers.at(i);
-        auto xi = data.at<double>(idx_i, x_pos);
-        auto yi = data.at<double>(idx_i, y_pos);
-        auto ti = data.at<double>(idx_i, t_pos);
+        auto xi = orient_features->at<double>(idx_i, x_pos);
+        auto yi = orient_features->at<double>(idx_i, y_pos);
+        auto ti = orient_features->at<double>(idx_i, t_pos);
         auto li = lineFromSIFT(xi, yi, ti);
         for (size_t j = i + 1; j < orient_inliers.size(); j++)
         {
             auto idx_j = orient_inliers.at(j);
-            auto xj = data.at<double>(idx_j, x_pos);
-            auto yj = data.at<double>(idx_j, y_pos);
-            auto tj = data.at<double>(idx_j, t_pos);
+            auto xj = orient_features->at<double>(idx_j, x_pos);
+            auto yj = orient_features->at<double>(idx_j, y_pos);
+            auto tj = orient_features->at<double>(idx_j, t_pos);
             auto lj = lineFromSIFT(xj, yj, tj);
             auto vp = li.cross(lj); // intersection of lines is vanishing point
             if ((vp.array().cwiseAbs() < 1e-6).all())
             {
-                fprintf(stdout, "Degenerate vanishing point\n");
                 return false;
             }
             if (std::abs(vp[2]) < 1e-6)
@@ -226,85 +230,74 @@ bool RectifyingHomographyTwoSIFTSolver::isValidSample(
 }
 
 void RectifyingHomographyTwoSIFTSolver::setScaleConstraint(
-    const double* feature,
-    const size_t& idx,
+    double x, double y, double scale, size_t row_idx,
     Eigen::Matrix<double, 3, 4>& coeffs
 )
 {
-    coeffs(idx, 0) = feature[x_pos];
-    coeffs(idx, 1) = feature[y_pos];
-    coeffs(idx, 2) = -pow(feature[s_pos], kScalePower);
-    coeffs(idx, 3) = -1.0;
+    coeffs(row_idx, 0) = x;
+    coeffs(row_idx, 1) = y;
+    coeffs(row_idx, 2) = -pow(scale, kScalePower);
+    coeffs(row_idx, 3) = -1.0;
 }
 
 void RectifyingHomographyTwoSIFTSolver::setOrientationConstraint(
-    const double* feature1,
-    const double* feature2,
-    const size_t& idx,
-    Eigen::Matrix<double, 3, 4>& coeffs
+    double x1, double y1, double theta1,
+    double x2, double y2, double theta2,
+    size_t row_idx, Eigen::Matrix<double, 3, 4>& coeffs
 )
 {
-    const auto l1 = lineFromSIFT(feature1[x_pos], feature1[y_pos], feature1[t_pos]);
-    const auto l2 = lineFromSIFT(feature2[x_pos], feature2[y_pos], feature2[t_pos]);
+    const auto l1 = lineFromSIFT(x1, y1, theta1);
+    const auto l2 = lineFromSIFT(x2, y2, theta2);
     auto vp = l1.cross(l2); // intersection of lines is vanishing point
     const auto max_abs_value = vp.cwiseAbs().maxCoeff();
     if (max_abs_value > 1.0)
     {
         vp /= max_abs_value;
     }
-    coeffs(idx, 0) = vp(0);
-    coeffs(idx, 1) = vp(1);
-    coeffs(idx, 2) = 0;
-    coeffs(idx, 3) = -vp(2);
+    coeffs(row_idx, 0) = vp(0);
+    coeffs(row_idx, 1) = vp(1);
+    coeffs(row_idx, 2) = 0;
+    coeffs(row_idx, 3) = -vp(2);
 }
 
 void RectifyingHomographyTwoSIFTSolver::setScaleConstraint(
-    const double* feature,
-    const double& weight,
-    const size_t& idx,
-    Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs,
-    Eigen::VectorXd& rhs
+    double x, double y, double scale, double weight, size_t row_idx, 
+    Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs, Eigen::VectorXd& rhs
 )
 {
-    coeffs(idx, 0) = weight * feature[x_pos];
-    coeffs(idx, 1) = weight * feature[y_pos];
-    coeffs(idx, 2) = -weight * pow(feature[s_pos], kScalePower);
-    rhs(idx) = -weight;
+    coeffs(row_idx, 0) = weight * x;
+    coeffs(row_idx, 1) = weight * y;
+    coeffs(row_idx, 2) = -weight * pow(scale, kScalePower);
+    rhs(row_idx) = -weight;
 }
 
 void RectifyingHomographyTwoSIFTSolver::setOrientationConstraint(
-    const double* feature1,
-    const double* feature2,
-    const double& weight1,
-    const double& weight2,
-    const size_t& idx,
-    Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs,
+    double x1, double y1, double theta1, double weight1,
+    double x2, double y2, double theta2, double weight2,
+    size_t row_idx, Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs,
     Eigen::VectorXd& rhs
 )
 {
     const auto w = weight1 * weight2;
-    const auto l1 = lineFromSIFT(feature1[x_pos], feature1[y_pos], feature1[t_pos]);
-    const auto l2 = lineFromSIFT(feature2[x_pos], feature2[y_pos], feature2[t_pos]);
+    const auto l1 = lineFromSIFT(x1, y1, theta1);
+    const auto l2 = lineFromSIFT(x2, y2, theta2);
     auto vp = l1.cross(l2); // intersection of lines is vanishing point
     const auto max_abs_value = vp.cwiseAbs().maxCoeff();
     if (max_abs_value > 1.0)
     {
         vp /= max_abs_value;
     }
-    coeffs(idx, 0) = w * vp(0);
-    coeffs(idx, 1) = w * vp(1);
-    coeffs(idx, 2) = 0.0;
-    rhs(idx) = -w * vp(2);
+    coeffs(row_idx, 0) = w * vp(0);
+    coeffs(row_idx, 1) = w * vp(1);
+    coeffs(row_idx, 2) = 0.0;
+    rhs(row_idx) = -w * vp(2);
 }
 
 double RectifyingHomographyTwoSIFTSolver::rectifiedAngle(
-    const double* feature,
-    const SIFTRectifyingHomography& model
+    double x, double y, double theta, const SIFTRectifyingHomography& model
 )
 {
-    double rect_angle = model.rectifiedAngle(
-        feature[x_pos], feature[y_pos], feature[t_pos]
-    );
+    double rect_angle = model.rectifiedAngle(x, y, theta);
     rect_angle = fmod(rect_angle, M_PI);
     if (std::signbit(rect_angle))
     {
@@ -313,20 +306,16 @@ double RectifyingHomographyTwoSIFTSolver::rectifiedAngle(
     return rect_angle;
 }
 
-constexpr inline size_t nChoose2(const size_t& n)
-{
-    return (n * (n - 1)) / 2;
-}
-
 bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
-    const cv::Mat& data,
+    const std::unique_ptr<const cv::Mat>& scale_features,
     const std::vector<size_t>& scale_inliers,
+    const std::unique_ptr<const cv::Mat>& orientation_features,
     const std::vector<size_t>& orient_inliers,
     std::vector<SIFTRectifyingHomography>& models
 ) const
 {
     const auto n_scale_constraints = scale_inliers.size();
-    const auto n_orientation_constraints = nChoose2(orient_inliers.size());
+    const auto n_orientation_constraints = utils::nChoose2(orient_inliers.size());
     // make sure there are enough constraints from each type to estimate the model.
     if (n_scale_constraints != 2 || n_orientation_constraints != 1)
     {
@@ -341,67 +330,61 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
         return false;
     }
        
-    // helper function to fetch correct inliers
-    const auto* data_ptr = reinterpret_cast<double*>(data.data);
-    auto get_scale_inlier = [&data_ptr, &scale_inliers, &data](
-        const size_t& feature_idx
-    )
-    {
-        const size_t& idx = scale_inliers.empty() ?
-                            feature_idx :
-                            scale_inliers[feature_idx];
-        return data_ptr + idx * data.cols;
-    };
-    auto get_orientation_inlier = [&data_ptr, &orient_inliers, &data](
-        const size_t& feature_idx
-    )
-    {
-        const size_t& idx = orient_inliers.empty() ?
-                            feature_idx :
-                            orient_inliers[feature_idx];
-        return data_ptr + idx * data.cols;
-    };
-
     Eigen::Matrix<double, 3, 4> coeffs;
     size_t row_idx = 0;
 
-    const auto* scale_inlier1 = get_scale_inlier(0);
-    setScaleConstraint(scale_inlier1, row_idx++, coeffs);
+    auto inlier_idx = scale_inliers[0];
+    double x = scale_features->at<double>(inlier_idx, x_pos);
+    double y = scale_features->at<double>(inlier_idx, y_pos);
+    double s = scale_features->at<double>(inlier_idx, s_pos);
+    setScaleConstraint(x, y, s, row_idx++, coeffs);
 
-    const auto* scale_inlier2 = get_scale_inlier(1);
-    setScaleConstraint(scale_inlier2, row_idx++, coeffs);
+    inlier_idx = scale_inliers[1];
+    x = scale_features->at<double>(inlier_idx, x_pos);
+    y = scale_features->at<double>(inlier_idx, y_pos);
+    s = scale_features->at<double>(inlier_idx, s_pos);
+    setScaleConstraint(x, y, s, row_idx++, coeffs);
 
-    const auto* orientation_inlier1 = get_orientation_inlier(0);
-    const auto* orientation_inlier2 = get_orientation_inlier(1);
+    inlier_idx = orient_inliers[0];
+    double x1 = orientation_features->at<double>(inlier_idx, x_pos);
+    double y1 = orientation_features->at<double>(inlier_idx, y_pos);
+    double theta1 = orientation_features->at<double>(inlier_idx, t_pos);
+
+    inlier_idx = orient_inliers[1];
+    double x2 = orientation_features->at<double>(inlier_idx, x_pos);
+    double y2 = orientation_features->at<double>(inlier_idx, y_pos);
+    double theta2 = orientation_features->at<double>(inlier_idx, t_pos);
+
     setOrientationConstraint(
-        orientation_inlier1, orientation_inlier2, row_idx++, coeffs
+        x1, y1, theta1, x2, y2, theta2, row_idx++, coeffs
     );
 
-    Eigen::Matrix<double, 3, 1> x;
-    gcransac::utils::gaussElimination<3>(coeffs, x);
-    if (x.hasNaN())
+    Eigen::Matrix<double, 3, 1> solution;
+    gcransac::utils::gaussElimination<3>(coeffs, solution);
+    if (solution.hasNaN())
     {
         return false;
     }
     // construct model
     SIFTRectifyingHomography model;
-    model.h7 = x(0);
-    model.h8 = x(1);
-    model.alpha = x(2);
+    model.h7 = solution(0);
+    model.h8 = solution(1);
+    model.alpha = solution(2);
     if (model.alpha < kEpsilon)
     {
         return false;
     }
-    const auto rectified_t1 = rectifiedAngle(orientation_inlier1, model);
-    const auto rectified_t2 = rectifiedAngle(orientation_inlier2, model);
-    if (absoluteAngleDiff(rectified_t1, rectified_t2) > M_PI / 180.0)
+    const auto rectified_t1 = rectifiedAngle(x1, y1, theta1, model);
+    const auto rectified_t2 = rectifiedAngle(x2, y2, theta2, model);
+    if (absoluteAngleDiff(rectified_t1, rectified_t2) > utils::deg2rad(1.0))
     {
-        fprintf(
-            stderr, 
-            "Invalid solution for the minimal case: rectified angles are not "
-            "parallel (angle #1: %f, angle #2: %f).\n",
-            rectified_t1, rectified_t2
-        );
+        // fprintf(
+        //     stderr, 
+        //     "Invalid solution for the minimal case: rectified angles are not "
+        //     "parallel (angle #1: %f, angle #2: %f, h7: %f, h8: %f).\n",
+        //     (rectified_t1 * M_1_PI * 180.0), (rectified_t2 * M_1_PI * 180.0),
+        //     model.h7, model.h8
+        // );
         return false;
     }
     model.vanishing_point_dir1 = 0.5 * (rectified_t1 + rectified_t2);
@@ -462,8 +445,9 @@ double findWeightedMode(
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
-    const cv::Mat &data,
+    const std::unique_ptr<const cv::Mat>& scale_features,
     const std::vector<size_t>& scale_inliers,
+    const std::unique_ptr<const cv::Mat>& orient_features,
     const std::vector<size_t>& orient_inliers,
     std::vector<SIFTRectifyingHomography>& models,
     const std::vector<double>& scale_weights,
@@ -471,10 +455,10 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
 ) const
 {
     using namespace std;
-    constexpr auto kBinWidth = M_PI / 360.0; // half-degree in radians
+    const auto kBinWidth = utils::deg2rad(0.5); // half-degree in radians
 
     const auto n_scale_constraints = scale_inliers.size();
-    const auto n_orientation_constraints = nChoose2(orient_inliers.size());
+    const auto n_orientation_constraints = utils::nChoose2(orient_inliers.size());
     // make sure there are enough constraints from each type to estimate the model.
     if (n_scale_constraints < 2 || n_orientation_constraints < 1)
     {
@@ -512,42 +496,19 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
         );
         return false;
     }
-    // helper function to fetch correct inliers
-    const auto* data_ptr = reinterpret_cast<double*>(data.data);
-    auto get_scale_inlier = [&data_ptr, &scale_inliers, &data](
-        const size_t& feature_idx
-    )
-    {
-        const size_t& idx = scale_inliers.empty() ?
-                            feature_idx :
-                            scale_inliers[feature_idx];
-        return data_ptr + idx * data.cols;
-    };
-    auto get_orientation_inlier = [&data_ptr, &orient_inliers, &data](
-        const size_t& feature_idx
-    )
-    {
-        const size_t& idx = orient_inliers.empty() ?
-                            feature_idx :
-                            orient_inliers[feature_idx];
-        return data_ptr + idx * data.cols;
-    };
+    // helper function to fetch correct weights
     auto get_scale_weight = [&scale_inliers, &scale_weights](
         const size_t& feature_idx
     )
     {
-        const size_t& idx = scale_inliers.empty() ?
-                            feature_idx :
-                            scale_inliers[feature_idx];
+        const size_t& idx = scale_inliers[feature_idx];
         return scale_weights.empty() ? 1.0 : scale_weights[idx];
     };
     auto get_orientation_weight = [&orient_inliers, &orient_weights](
         const size_t& feature_idx
     )
     {
-        const size_t& idx = orient_inliers.empty() ?
-                            feature_idx :
-                            orient_inliers[feature_idx];
+        const size_t& idx = orient_inliers[feature_idx];
         return orient_weights.empty() ? 1.0 : orient_weights[idx];
     };
     // the number of rows in the coefficient matrix is the total number of constraints.
@@ -557,27 +518,35 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     Eigen::VectorXd rhs(n_rows, 1);
     // populate first sample_size rows of coeffs and rhs matrices with the
     // constraints derived from positions and scales
-    size_t curr_idx = 0;
+    size_t curr_idx{0};
+    size_t inlier_idx{0};
     for (size_t i = 0; i < scale_inliers.size(); i++)
     {
-        const auto* scale_inlier = get_scale_inlier(i);
-        const auto& scale_weight = get_scale_weight(i);
-        setScaleConstraint(scale_inlier, scale_weight, curr_idx++, coeffs, rhs);
+        inlier_idx = scale_inliers[i];
+        auto x = scale_features->at<double>(inlier_idx, x_pos);
+        auto y = scale_features->at<double>(inlier_idx, y_pos);
+        auto scale = scale_features->at<double>(inlier_idx, s_pos);
+        auto weight = get_scale_weight(i);
+        setScaleConstraint(x, y, scale, weight, curr_idx++, coeffs, rhs);
     }
     // populate last "sample_size choose 2" rows of coeffs and rhs matrices
     // with the constraints derived from positions and orientations
     for (size_t i = 0; i < orient_inliers.size() - 1; i++)
     {
-        const auto* orient_inlier_i = get_orientation_inlier(i);
-        const auto& orient_weight_i = get_orientation_weight(i);
+        inlier_idx = orient_inliers[i];
+        auto xi = orient_features->at<double>(inlier_idx, x_pos); 
+        auto yi = orient_features->at<double>(inlier_idx, y_pos); 
+        auto ti = orient_features->at<double>(inlier_idx, t_pos);
+        auto wi = get_orientation_weight(i);
         for (size_t j = i + 1; j < orient_inliers.size(); j++)
         {
-            const auto* orient_inlier_j = get_orientation_inlier(j);
-            const auto& orient_weight_j = get_orientation_weight(j);
+            inlier_idx = orient_inliers[j];
+            auto xj = orient_features->at<double>(inlier_idx, x_pos); 
+            auto yj = orient_features->at<double>(inlier_idx, y_pos); 
+            auto tj = orient_features->at<double>(inlier_idx, t_pos);
+            auto wj = get_orientation_weight(j); 
             setOrientationConstraint(
-                orient_inlier_i, orient_inlier_j,
-                orient_weight_i, orient_weight_j,
-                curr_idx++, coeffs, rhs
+                xi, yi, ti, wi, xj, yj, tj, wj, curr_idx++, coeffs, rhs
             );
         }
     }
@@ -594,18 +563,18 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
         return false;
     }
     // solve linear least squares system
-    Eigen::Matrix<double, 3, 1> x = coeffs.colPivHouseholderQr().solve(rhs);
+    Eigen::Matrix<double, 3, 1> solution = coeffs.colPivHouseholderQr().solve(rhs);
     // verify validity of solution
-    if (x.hasNaN())
+    if (solution.hasNaN())
     {
         fprintf(stderr, "Invalid solution for the non-minimal model\n");
         return false;
     }
     // construct model
     SIFTRectifyingHomography model;
-    model.h7 = x(0);
-    model.h8 = x(1);
-    model.alpha = x(2);
+    model.h7 = solution(0);
+    model.h8 = solution(1);
+    model.alpha = solution(2);
     if (model.alpha < kEpsilon)
     {
         return false;
@@ -614,8 +583,11 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     std::vector<double> angle_weights(orient_inliers.size(), 0.0);
     for (size_t i = 0; i < orient_inliers.size(); i++)
     {
-        const auto* orient_inlier = get_orientation_inlier(i);
-        rectified_angles.at(i) = rectifiedAngle(orient_inlier, model);
+        auto inlier_idx = orient_inliers[i];
+        auto x = orient_features->at<double>(inlier_idx, x_pos);
+        auto y = orient_features->at<double>(inlier_idx, y_pos);
+        auto theta = orient_features->at<double>(inlier_idx, t_pos);
+        rectified_angles.at(i) = rectifiedAngle(x, y, theta, model);
         angle_weights.at(i) = get_orientation_weight(i);
     }
     model.vanishing_point_dir1 = findWeightedMode(
@@ -628,25 +600,18 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateModel(
-    const cv::Mat& data,
+    const DataType& data,
     const InlierContainerType& inliers,
     std::vector<SIFTRectifyingHomography>& models,
     const WeightType& weights
 ) const
 {
-    if (inliers.size() < 2)
-    {
-        fprintf(
-            stderr,
-            "Not enought inlier sets were given for model estimation. "
-            "Received %ld inlier sets.\n", inliers.size() 
-        );
-        return false;
-    }
+    const auto& scale_features = data[scale_set_idx];
     const auto& scale_inliers = inliers[scale_set_idx];
+    const auto& orient_features = data[orient_set_idx];
     const auto& orient_inliers = inliers[orient_set_idx];
     const auto n_scale_constraints = scale_inliers.size();
-    const auto n_orientation_constraints = nChoose2(orient_inliers.size());
+    const auto n_orientation_constraints = utils::nChoose2(orient_inliers.size());
     if (n_scale_constraints < 2 || n_orientation_constraints < 1)
     {
         fprintf(
@@ -662,32 +627,28 @@ bool RectifyingHomographyTwoSIFTSolver::estimateModel(
     if (n_scale_constraints == 2 && n_orientation_constraints == 1)
     {
         return estimateMinimalModel(
-            data, scale_inliers, orient_inliers, models
+            scale_features, scale_inliers, orient_features, orient_inliers,
+            models
         );
     }
     const auto& scale_weights = weights[scale_set_idx];
     const auto& orient_weights = weights[orient_set_idx];
     return estimateNonMinimalModel(
-        data, scale_inliers, orient_inliers, models,
+        scale_features, scale_inliers, orient_features, orient_inliers, models,
         scale_weights, orient_weights
     );
 }
 
-RectifyingHomographyTwoSIFTSolver::ResidualType RectifyingHomographyTwoSIFTSolver::residual(
-    const cv::Mat& feature,
-    const SIFTRectifyingHomography& model
-) const
+double RectifyingHomographyTwoSIFTSolver::scaleResidual(
+    double x, double y, double s, const SIFTRectifyingHomography& model
+)
 {
-    const auto* feature_ptr = reinterpret_cast<double*>(feature.data);
-    Eigen::Vector3d point(feature_ptr[x_pos], feature_ptr[y_pos], 1.0);
-    double scale = feature_ptr[s_pos];
-    // Normalize coordinates and scale (orientation is unchanged by normalization).
+    Eigen::Vector3d point(x, y, 1.0);
+    double scale = s;
+    // Normalize coordinates and scale
     model.normalize(point);
     model.normalizeScale(scale);
-    // Rectify orientation and scale.
-    const auto rectified_orientation = model.rectifiedAngle(
-        point(0), point(1), feature_ptr[t_pos]
-    );
+    // Rectify  scale
     const auto rectified_scale = model.rectifiedScale(
         point(0), point(1), scale
     );
@@ -695,76 +656,123 @@ RectifyingHomographyTwoSIFTSolver::ResidualType RectifyingHomographyTwoSIFTSolve
     const auto alpha_cube = std::pow(model.alpha, 3.0);
     // scale-based residual: logarithmic scale difference between the feature's
     // rectified scale and the model's estimated rectified scale for all features.
-    const auto r_scale = std::fabs(std::log(rectified_scale / alpha_cube));
+    return std::fabs(std::log(rectified_scale / alpha_cube));
+}
+
+double RectifyingHomographyTwoSIFTSolver::orientationResidual(
+    double x, double y, double t, const SIFTRectifyingHomography& model
+)
+{
+    Eigen::Vector3d point(x, y, 1.0);
+    // Normalize coordinates (orientation is unchanged by normalization)
+    model.normalize(point);
+    // Rectify orientation
+    const auto rectified_orientation = model.rectifiedAngle(
+        point(0), point(1), t
+    );
     // orientation-based residual: the minimal angular distance between the
     // feature's rectified orientation and the model's two orthogonal principle
     // orientations.  
-    const auto r_orientation = std::fmin(
+    return std::fmin(
         absoluteAngleDiff(model.vanishing_point_dir1, rectified_orientation),
         absoluteAngleDiff(model.vanishing_point_dir2, rectified_orientation)
     );
-
-    return {r_scale, r_orientation};
 }
 
-RectifyingHomographyTwoSIFTSolver::ResidualType RectifyingHomographyTwoSIFTSolver::squaredResidual(
-    const cv::Mat& feature,
+double RectifyingHomographyTwoSIFTSolver::residual(
+    size_t type, const cv::Mat& feature, const SIFTRectifyingHomography& model
+) const
+{
+    double r{DBL_MAX};
+    if (type == scale_set_idx)
+    {
+        auto x = feature.at<double>(0, x_pos);
+        auto y = feature.at<double>(0, y_pos);
+        auto scale = feature.at<double>(0, s_pos);
+        r = scaleResidual(x, y, scale, model);
+    }
+    else if (type == orient_set_idx)
+    {
+        auto x = feature.at<double>(0, x_pos);
+        auto y = feature.at<double>(0, y_pos);
+        auto theta = feature.at<double>(0, t_pos);
+        r = orientationResidual(x, y, theta, model);
+    }
+    else
+    {
+        std::stringstream err_msg;
+        err_msg << "Invalid type argument in class method "
+                << "RectifyingHomographyTwoSIFTSolver::residual. "
+                << "Expected 0 or 1, but received " << type << std::endl;
+        throw std::runtime_error(err_msg.str());
+    }
+    return r;
+}
+
+double RectifyingHomographyTwoSIFTSolver::squaredResidual(
+    size_t type, const cv::Mat& feature,
     const SIFTRectifyingHomography& model
 ) const
 {
-    const auto r = residual(feature, model);
+    const auto r = residual(type, feature, model);
     return r * r;
 }
 
 bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
-    const cv::Mat& data, // The data points
-    const std::vector<size_t>& inliers,
-    cv::Mat& normalized_features, // The normalized features
+    const DataType& data, // The data points
+    const InlierContainerType& inliers,
+    MutableDataType& normalized_features, // The normalized features
     NormalizingTransform& normalizing_transform // the normalization transformation model
 ) const
 {
-    if (inliers.size() < 1)
+    const auto n_total_inliers = inliers[0].size() + inliers[1].size();
+    if (n_total_inliers < 1)
     {
         fprintf(stderr,
             "Feature normalization failed because number of input features is zero.\n"
         );
         return false;
     }
-    // helper function to fetch correct sample
-    const auto* data_ptr = reinterpret_cast<double*>(data.data);
-    auto get_inlier = [&data_ptr, &data, &inliers](const size_t& i) {
-        const size_t idx = inliers.empty() ? i : inliers[i];
-        return data_ptr + idx * data.cols;
-    };
     // compute mean position of features
     normalizing_transform.x0 = 0.0;
     normalizing_transform.y0 = 0.0;
-    for (size_t i = 0; i < inliers.size(); i++)
+    for (size_t i = 0; i < ResidualDimension::value; i++)
     {
-        const auto* feature = get_inlier(i);
-        normalizing_transform.x0 += feature[x_pos]; // x-coordinate
-        normalizing_transform.y0 += feature[y_pos]; // y-coordinate
+        for (size_t j = 0; j < inliers[i].size(); j++)
+        {
+            auto inlier_idx = inliers[i][j];
+            auto x = data[i]->at<double>(inlier_idx, x_pos);
+            auto y = data[i]->at<double>(inlier_idx, y_pos);
+            normalizing_transform.x0 += x; // x-coordinate
+            normalizing_transform.y0 += y; // y-coordinate
+        }
     }
-    const auto inv_n = 1.0 / static_cast<double>(inliers.size());
+    const auto inv_n = 1.0 / static_cast<double>(n_total_inliers);
     normalizing_transform.x0 *= inv_n;
     normalizing_transform.y0 *= inv_n;
     // compute average Euclidean distance to mean position
     double avg_dist = 0.0;
-    for (size_t i = 0; i < inliers.size(); i++)
+    for (size_t i = 0; i < ResidualDimension::value; i++)
     {
-        const auto* feature = get_inlier(i);
-        const auto dx = feature[x_pos] - normalizing_transform.x0; // x-coordinate
-        const auto dy = feature[y_pos] - normalizing_transform.y0; // y-coordinate
-        avg_dist += sqrt(dx * dx + dy * dy);
+        for (size_t j = 0; j < inliers[i].size(); j++)
+        {
+            auto inlier_idx = inliers[i][j];
+            auto x = data[i]->at<double>(inlier_idx, x_pos);
+            auto y = data[i]->at<double>(inlier_idx, y_pos);
+            const auto dx = x - normalizing_transform.x0;
+            const auto dy = y - normalizing_transform.y0;
+            avg_dist += sqrt(dx * dx + dy * dy);
+        }
     }
     avg_dist *= inv_n;
     if (avg_dist < kEpsilon)
     {
-        fprintf(stderr,
-            "Feature normalization failed because all features are located in the \
-            same position (near-zero average distance from mean position), or because \
-            the average distance came out negative. Average distance: %f\n",
-            avg_dist
+        fprintf(
+            stderr,
+            "Feature normalization failed because all features are located in "
+            "the same position (near-zero average distance from mean "
+            "position), or because the average distance came out negative. "
+            "Average distance: %f\n", avg_dist
         );
         return false;
     }
@@ -773,47 +781,74 @@ bool RectifyingHomographyTwoSIFTSolver::normalizePoints(
     normalizing_transform.s = M_SQRT2 / avg_dist;
     // compute normalized features - normalizing is relevant only for coordinates
     // and scale as the scaling of feature positions about the origin is isotropic
-    auto* norm_features_ptr = reinterpret_cast<double*>(normalized_features.data);
-    const auto n_cols = static_cast<size_t>(normalized_features.cols);
-    for (size_t i = 0; i < inliers.size(); i++)
-    {
-        const auto* feature = get_inlier(i);
-        auto norm_x = feature[x_pos]; // x-coordinate
-        auto norm_y = feature[y_pos]; // y-coordinate
-        auto norm_scale = feature[s_pos]; // scale
-
-        normalizing_transform.normalize(norm_x, norm_y);
-        normalizing_transform.normalizeScale(norm_scale);
-        
-        norm_features_ptr[i * n_cols + x_pos] = norm_x;
-        norm_features_ptr[i * n_cols + y_pos] = norm_y;
-        // orientation is not affected by translation and isotropic scaling
-        norm_features_ptr[i * n_cols + t_pos] = feature[t_pos];
-        norm_features_ptr[i * n_cols + s_pos] = norm_scale;
-        // ensures that if the dimension of the features is larger
-        // than 4, then the normalization will still succeed.
-        for (size_t j = feature_size; j < n_cols; j++)
-        {
-			norm_features_ptr[i * n_cols + j] = feature[j];
-        }
-    }
-
-    // for (size_t i = 0; i < inliers.size(); i++)
+    // for (size_t i = 0; i < ResidualDimension::value; i++)
     // {
-    //     const auto* feature = get_inlier(i);
-    //     norm_features_ptr[i * n_cols + x_pos] = feature[x_pos];
-    //     norm_features_ptr[i * n_cols + y_pos] = feature[y_pos];
-    //     norm_features_ptr[i * n_cols + t_pos] = feature[t_pos];
-    //     norm_features_ptr[i * n_cols + s_pos] = feature[s_pos];
-
-    //     for (size_t j = feature_size; j < n_cols; j++)
+    //     for (size_t j = 0; j < inliers[i].size(); j++)
     //     {
-	// 	    norm_features_ptr[i * n_cols + j] = feature[j];
+    //         auto inlier_idx = inliers[i][j];
+    //         auto x = data[i]->at<double>(inlier_idx, x_pos);
+    //         auto y = data[i]->at<double>(inlier_idx, y_pos);
+    //         normalizing_transform.normalize(x, y);
+    //         normalized_features[i]->at<double>(j, x_pos) = x;
+    //         normalized_features[i]->at<double>(j, y_pos) = y;
+
+    //         if (i == scale_set_idx)
+    //         {
+    //             auto scale = data[i]->at<double>(inlier_idx, s_pos);
+    //             normalizing_transform.normalizeScale(scale);
+    //             normalized_features[i]->at<double>(j, s_pos) = scale;
+    //         }
+    //         else if (i == orient_set_idx)
+    //         {
+    //             // orientation is not affected by translation and isotropic
+    //             // scaling
+    //             auto theta = data[i]->at<double>(inlier_idx, t_pos);
+    //             normalized_features[i]->at<double>(j, t_pos) = theta;
+    //         }
+    //         else
+    //         {
+    //             std::stringstream err_msg;
+    //             err_msg << "ERROR in class method "
+    //                     << "RectifyingHomographyTwoSIFTSolver::normalizePoints: "
+    //                     << "unexpected inlier index " << i << " received.\n";
+    //             throw std::runtime_error(err_msg.str());
+    //         }
     //     }
     // }
-    // normalizing_transform.x0 = 0.0;
-    // normalizing_transform.y0 = 0.0;
-    // normalizing_transform.s = 1.0;
+
+    for (size_t i = 0; i < ResidualDimension::value; i++)
+    {
+        for (size_t j = 0; j < inliers[i].size(); j++)
+        {
+            auto inlier_idx = inliers[i][j];
+            auto x = data[i]->at<double>(inlier_idx, x_pos);
+            auto y = data[i]->at<double>(inlier_idx, y_pos);
+            normalized_features[i]->at<double>(j, x_pos) = x;
+            normalized_features[i]->at<double>(j, y_pos) = y;
+
+            if (i == scale_set_idx)
+            {
+                auto scale = data[i]->at<double>(inlier_idx, s_pos);
+                normalized_features[i]->at<double>(j, s_pos) = scale;
+            }
+            else if (i == orient_set_idx)
+            {
+                auto theta = data[i]->at<double>(inlier_idx, t_pos);
+                normalized_features[i]->at<double>(j, t_pos) = theta;
+            }
+            else
+            {
+                std::stringstream err_msg;
+                err_msg << "ERROR in class method "
+                        << "RectifyingHomographyTwoSIFTSolver::normalizePoints: "
+                        << "unexpected inlier index " << i << " received.\n";
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+    }
+    normalizing_transform.x0 = 0.0;
+    normalizing_transform.y0 = 0.0;
+    normalizing_transform.s = 1.0;
 
     return true;
 }

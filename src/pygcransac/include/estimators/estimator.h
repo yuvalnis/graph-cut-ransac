@@ -52,6 +52,8 @@ public:
 	using ResidualType = typename Solver::ResidualType;
 	using WeightType = typename Solver::WeightType;
 	using SampleSizeType = typename Solver::SampleSizeType;
+	using DataType = typename Solver::DataType;
+	using MutableDataType = typename Solver::MutableDataType;
 
 	virtual ~Estimator() {}
 
@@ -68,7 +70,7 @@ public:
 	// successful model estimation (and outputs model), false for failed
 	// estimation. Typically, this is a minimal set, but it is not required to be.
 	virtual bool estimateModel(
-		const cv::Mat& data,
+		const DataType& data,
 		const InlierContainerType& inliers,
 		std::vector<Model>& model
 	) const = 0;
@@ -79,7 +81,7 @@ public:
 	// In case of weighted least-squares, the weights can be fed into the
 	// function.
 	virtual bool estimateModelNonminimal(
-		const cv::Mat& data,
+		const DataType& data,
 		const InlierContainerType& inliers,
 		std::vector<Model>& model,
 		const WeightType& weights = WeightType{}
@@ -87,14 +89,18 @@ public:
 
 	// Given a model and a data point, calculate the error. Users should implement
 	// this function appropriately for the task being solved.
-	inline virtual ResidualType residual(const cv::Mat& data, const Model& model) const = 0;
+	inline virtual double residual(
+		size_t type, const cv::Mat& feature, const Model& model
+	) const = 0;
 
-	inline virtual ResidualType squaredResidual(const cv::Mat& data, const Model& model) const = 0;
+	inline virtual double squaredResidual(
+		size_t type, const cv::Mat& feature, const Model& model
+	) const = 0;
 	
 	// A function to decide if the selected sample is degenerate or not
 	// before calculating the model parameters
 	inline virtual bool isValidSample(
-		const cv::Mat& data,
+		const DataType& data,
 		const InlierContainerType& inliers
 	) const = 0;
 
@@ -109,7 +115,7 @@ public:
 	// check or some other verification of the model structure.
 	inline virtual bool isValidModel(
 		[[maybe_unused]] Model& model,
-		[[maybe_unused]] const cv::Mat& data,
+		[[maybe_unused]] const DataType& data,
 		[[maybe_unused]] const InlierContainerType& inliers,
 		[[maybe_unused]] const InlierContainerType& minimal_sample,
 		[[maybe_unused]] const ResidualType threshold,

@@ -42,6 +42,23 @@
 namespace gcransac::utils
 {
 
+inline size_t nChoose2(const size_t& n)
+{
+    return (n * (n - 1)) / 2;
+}
+
+double deg2rad(double angle)
+{
+    constexpr double kDegToRad{M_PI / 180.0};
+    return angle * kDegToRad;
+}
+
+double rad2deg(double angle)
+{
+    constexpr double kRadToDeg{M_1_PI * 180.0};
+    return angle * kRadToDeg;
+}
+
 class Point2D
 {
 public:

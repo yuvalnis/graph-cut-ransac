@@ -8,7 +8,7 @@ option(TEST_THREE_SIFT_SCALE_ONLY "Test Three SIFT Scale Only" OFF)
 option(TEST_TWO_SIFT "Test Two SIFT" OFF)
 option(TEST_NON_ID_TWO_SIFT "Test Non Identity TWO SIFT" ON)
 option(TEST_NON_ID_THREE_SIFT "Test Non Identity THREE SIFT" ON)
-option(TEST_THREE_SIFT_CUSTOM_DATA "Test THREE SIFT Custom Data" OFF)
+option(TEST_THREE_SIFT_CUSTOM_DATA "Test THREE SIFT Custom Data" ON)
 option(TEST_TWO_SIFT_CUSTOM_DATA "Test TWO SIFT Custom Data" ON)
 
 set(CMAKE_CXX_STANDARD 17)

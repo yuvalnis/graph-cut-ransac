@@ -17,45 +17,41 @@ public:
 	using Model = typename Base::Model;
 	using InlierContainerType = typename Base::InlierContainerType;
 	using ThresholdType = typename Base::ThresholdType;
+	using DataType = typename Base::DataType;
 
 	void updateScoreWithFeature(
-		const cv::Mat& data,
-		const size_t& point_idx,
+		size_t type,
+		const std::unique_ptr<const cv::Mat>& data,
+		size_t point_idx,
 		const Model& model,
 		const ModelEstimator& estimator,
-		const ThresholdType& sqr_truncated_thresholds,
-		InlierContainerType& inliers,
+		double sqr_truncated_threshold,
+		std::vector<size_t>& inliers,
 		ScoreType& score
 	) const
 	{
-		const auto sqr_residuals = estimator.squaredResidual(
-			data.row(point_idx), model
+		const auto sqr_residual = estimator.squaredResidual(
+			type, data->row(point_idx), model
 		);
-		const Eigen::Array<bool, Eigen::Dynamic, 1> comparison =
-			sqr_residuals.array() <= sqr_truncated_thresholds.array();
-
-		for (size_t i = 0; i < NumInlierTypes::value; i++)
+		if (sqr_residual <= sqr_truncated_threshold)
 		{
-			if (comparison(i))
-			{
-				inliers[i].emplace_back(point_idx);
-				score.increment_inlier_num(i);
-				// Increase the score.
-				// The original truncated quadratic loss is as follows: 
-				// score = 1 - residual^2 / threshold^2.
-				// For RANSAC, -residual^2 is enough:
-				// It can been re-arranged as
-				// score = 1 - residual^2 / threshold^2				->
-				// score * threshold^2 = threshold^2 - residual^2		->
-				// score * threshold^2 - threshold^2 = - residual^2
-				// This is faster to calculate and it is normalized back afterwards.
-				score.increment_value(i, -sqr_residuals(i));
-			}
+			inliers.emplace_back(point_idx);
+			score.increment_inlier_num(type);
+			// Increase the score.
+			// The original truncated quadratic loss is as follows: 
+			// score = 1 - residual^2 / threshold^2.
+			// For RANSAC, -residual^2 is enough:
+			// It can been re-arranged as
+			// score = 1 - residual^2 / threshold^2				->
+			// score * threshold^2 = threshold^2 - residual^2	->
+			// score * threshold^2 - threshold^2 = - residual^2
+			// This is faster to calculate and it is normalized back afterwards.
+			score.increment_value(type, -sqr_residual);
 		}
 	}
 
 	ScoreType getScore(
-		const cv::Mat &data, // The input data points
+		const DataType &data, // The input data points
 		const Model &model, // The current model parameters
 		const ModelEstimator &estimator, // The model estimator
 		const ThresholdType& thresholds,
@@ -74,30 +70,39 @@ public:
 		// If the points are not prefiltered into index sets, iterate through all of them.
 		if (index_sets == nullptr)
 		{
-			const auto point_number = static_cast<size_t>(data.rows);
-			// Iterate through all points, calculate the sqr_residuals and store the points as inliers if needed.
-			for (size_t point_idx = 0; point_idx < point_number; point_idx ++)
+			for (size_t i = 0; i < NumInlierTypes::value; i++)
 			{
-				updateScoreWithFeature(
-					data, point_idx, model, estimator,
-					sqr_truncated_thresholds, inliers, score
-				);
+				auto point_number = static_cast<size_t>(data[i]->rows);
+				// Iterate through all points, calculate their squared residuals
+				// and store the points as inliers if needed.
+				for (size_t point_idx = 0; point_idx < point_number; point_idx++)
+				{
+					updateScoreWithFeature(
+						i, data[i], point_idx, model, estimator,
+						sqr_truncated_thresholds(i), inliers[i], score
+					);
+				}
 			}
 		}
 		else
 		{
+			throw std::runtime_error(
+				"Reached unimplemented code section in "
+				"MSACScoringFunction::getScore method with non-null "
+				"index-sets.\n"
+			);
 			// Iterating through the index sets
-			for (const auto &current_set : *index_sets)
-			{
-				// Iterating through the point indices in the current set
-				for (const auto point_idx : *current_set)
-				{
-					updateScoreWithFeature(
-						data, point_idx, model, estimator,
-						sqr_truncated_thresholds, inliers, score
-					);
-				}
-			}
+			// for (const auto &current_set : *index_sets)
+			// {
+			// 	// Iterating through the point indices in the current set
+			// 	for (const auto point_idx : *current_set)
+			// 	{
+			// 		updateScoreWithFeature(
+			// 			data, point_idx, model, estimator,
+			// 			sqr_truncated_thresholds, inliers, score
+			// 		);
+			// 	}
+			// }
 		}
 
 		// return score values to MSAC ones and sum them up to get final score
@@ -112,6 +117,11 @@ public:
 									  sqr_truncated_thresholds(i);
 			const auto msac_score = normed_score + static_cast<double>(n_inliers);
 			score.reset_value(i, msac_score);
+		}
+		// TODO remove
+		if (NumInlierTypes::value == 2 && score.num_inliers_by_type(1) < 2)
+		{
+			throw std::runtime_error("Less than two orientation inliers!");
 		}
 
 		return score;

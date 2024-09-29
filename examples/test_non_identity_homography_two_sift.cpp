@@ -91,10 +91,10 @@ int main(int argc, char* argv[])
 
     // prepare inputs
 	const auto input_size = num_squares * num_squares * kFeatureSize;
-    std::vector<double> gt_rectified_features;
-	gt_rectified_features.reserve(input_size);
-    std::vector<double> features;
-	features.reserve(input_size);
+    std::vector<double> scale_features;
+    std::vector<double> orientation_features;
+	scale_features.reserve(input_size);
+	orientation_features.reserve(input_size);
 	std::cout << "h7 = " << h7 << "\n";
 	std::cout << "h8 = " << h8 << "\n";
 	std::cout << "Input features:\n";
@@ -107,18 +107,15 @@ int main(int argc, char* argv[])
 			double y = 0.5 * kSquareSize * (2 * j + 1);
 			double t = 0.0 + gaussianNoise(0.0, angle_noise);
 			double s = kSquareSize;
-            // push rectified features to ground-truth feature vector
-            gt_rectified_features.push_back(x); // x-coordinate
-            gt_rectified_features.push_back(y); // y-coordinate
-            gt_rectified_features.push_back(t); // orientation
-            gt_rectified_features.push_back(s); // scale
             // compute unrectified features
             gt_model.unrectifyFeature(x, y, t, s);
             // push unrectified features to vector
-            features.push_back(x); // x-coordinate
-            features.push_back(y); // y-coordinate
-            features.push_back(t); // orientation
-            features.push_back(s); // scale
+            scale_features.push_back(x); // x-coordinate
+            scale_features.push_back(y); // y-coordinate
+            scale_features.push_back(s); // scale
+            orientation_features.push_back(x); // x-coordinate
+            orientation_features.push_back(y); // y-coordinate
+            orientation_features.push_back(t); // orientation
 			// print unrectified features
 			std::cout << "\t# " << (i * num_squares + j) << ": (" << x << ", " << y << ", " << (180.0 * M_1_PI * t) << ", " << s << ")\n";
         }
@@ -127,12 +124,11 @@ int main(int argc, char* argv[])
 
     std::vector<bool> scale_inliers(num_squares * num_squares);
 	std::vector<bool> orientation_inliers(num_squares * num_squares);
-	std::vector<double> weights(num_squares * num_squares, 1.0);
     std::vector<double> homography(9);
 	std::vector<double> vanishing_points(6);
 
     findRectifyingHomographySIFT_(
-		features, weights,
+		scale_features, orientation_features,
 		scale_residual_thresh, orientation_residual_thresh,
 		spatial_coherence_weight,
 		min_iteration_number, max_iteration_number,

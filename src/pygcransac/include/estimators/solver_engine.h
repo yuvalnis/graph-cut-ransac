@@ -35,6 +35,7 @@
 
 #include <array>
 #include <vector>
+#include <numeric>
 #include <opencv2/core/core.hpp>
 
 namespace gcransac::estimator::solver
@@ -47,9 +48,11 @@ public:
 	using Model = Model_t;
 	using ResidualDimension = std::integral_constant<size_t, ResidualDimension_t>;
 	using InlierContainerType = std::array<std::vector<size_t>, ResidualDimension_t>;
-	using ResidualType = Eigen::Array<double, ResidualDimension_t, 1>;
+	using ResidualType = Eigen::Array<double, ResidualDimension_t, 1>; // TODO might be able to remove
 	using WeightType = std::array<std::vector<double>, ResidualDimension_t>;
 	using SampleSizeType = std::array<size_t, ResidualDimension_t>;
+	using DataType = std::array<std::unique_ptr<const cv::Mat>, ResidualDimension_t>;
+	using MutableDataType = std::array<std::unique_ptr<cv::Mat>, ResidualDimension_t>;
 
 	SolverEngine() {}
 	virtual ~SolverEngine() {}
@@ -68,7 +71,7 @@ public:
 	inline virtual SampleSizeType sampleSize() const = 0;
 
 	inline virtual bool isValidSample(
-		[[maybe_unused]] const cv::Mat& data,
+		[[maybe_unused]] const DataType& data,
 		[[maybe_unused]] const InlierContainerType& inliers
 	) const
 	{
@@ -78,14 +81,21 @@ public:
 	// Estimate the model parameters from the given point sample
 	// using weighted fitting if possible.
 	virtual bool estimateModel(
-		const cv::Mat& data,
+		const DataType& data,
 		const InlierContainerType& inliers,
 		std::vector<Model>& models,
 		const WeightType& weights = WeightType{}
 	) const = 0;
 
-	virtual ResidualType residual(const cv::Mat& feature, const Model& model) const = 0;
-	virtual ResidualType squaredResidual(const cv::Mat& feature, const Model& model) const = 0;
+	virtual bool normalizePoints(
+		const DataType& data,
+		const InlierContainerType& inliers,
+		MutableDataType& normalized_features,
+		NormalizingTransform& normalizing_transform
+	) const = 0;
+
+	virtual double residual(size_t type, const cv::Mat& feature, const Model& model) const = 0;
+	virtual double squaredResidual(size_t type, const cv::Mat& feature, const Model& model) const = 0;
 };
 
 }

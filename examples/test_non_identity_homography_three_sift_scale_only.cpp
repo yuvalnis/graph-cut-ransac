@@ -81,8 +81,6 @@ int main(int argc, char* argv[])
 
     // prepare inputs
 	const auto input_size = num_squares * num_squares * kFeatureSize;
-    std::vector<double> gt_rectified_features;
-	gt_rectified_features.reserve(input_size);
     std::vector<double> features;
 	features.reserve(input_size);
 	std::cout << "h7 = " << h7 << "\n";
@@ -97,10 +95,6 @@ int main(int argc, char* argv[])
 			double y = 0.5 * kSquareSize * (2 * j + 1);
 			const double s_inflation = 1.0 + gaussianNoise(0.0, scale_noise);
 			double s = kSquareSize * s_inflation;
-            // push rectified features to ground-truth feature vector
-            gt_rectified_features.push_back(x); // x-coordinate
-            gt_rectified_features.push_back(y); // y-coordinate
-            gt_rectified_features.push_back(s); // scale
             // compute unrectified features
 			double dummy = 0.0;
             gt_model.unrectifyFeature(x, y, dummy, s);
@@ -121,8 +115,7 @@ int main(int argc, char* argv[])
     std::vector<double> homography(9);
 
 	findRectifyingHomographyScaleOnly_(
-		features, weights, scale_residual_thresh,
-		spatial_coherence_weight,
+		features, scale_residual_thresh, spatial_coherence_weight,
 		min_iteration_number, max_iteration_number,
 		max_local_optimization_number, inliers, homography, /*verbose_level=*/2
 	);
