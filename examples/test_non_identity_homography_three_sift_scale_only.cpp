@@ -96,8 +96,8 @@ int main(int argc, char* argv[])
 			const double s_inflation = 1.0 + gaussianNoise(0.0, scale_noise);
 			double s = kSquareSize * s_inflation;
             // compute unrectified features
-			double dummy = 0.0;
-            gt_model.unrectifyFeature(x, y, dummy, s);
+			s = gt_model.unrectifiedScale(x, y, s);
+			gt_model.unrectifyPoint(x, y);
             // push unrectified features to vector
             features.push_back(x); // x-coordinate
             features.push_back(y); // y-coordinate
@@ -113,11 +113,13 @@ int main(int argc, char* argv[])
 	std::vector<double> weights(num_squares * num_squares, 1.0);
     std::vector<bool> inliers(num_squares * num_squares);
     std::vector<double> homography(9);
+	gcransac::ScaleBasedRectifyingHomography model;
 
 	findRectifyingHomographyScaleOnly_(
 		features, scale_residual_thresh, spatial_coherence_weight,
 		min_iteration_number, max_iteration_number,
-		max_local_optimization_number, inliers, homography, /*verbose_level=*/2
+		max_local_optimization_number, inliers, homography, model,
+		/*verbose_level=*/2
 	);
 
     return 0;

@@ -97,12 +97,14 @@ int main(int argc, char* argv[])
 
     std::vector<bool> inliers(n_features);
     std::vector<double> homography(9);
+	gcransac::SIFTRectifyingHomography model;
 
 	findRectifyingHomographyScaleOnly_(
 		features, scale_residual_thresh,
 		spatial_coherence_weight,
 		min_iteration_number, max_iteration_number,
-		max_local_optimization_number, inliers, homography, /*verbose_level=*/1
+		max_local_optimization_number, inliers, homography, model,
+		/*verbose_level=*/1
 	);
 
     return 0;

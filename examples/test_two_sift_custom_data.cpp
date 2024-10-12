@@ -122,13 +122,15 @@ int main(int argc, char* argv[])
     std::vector<bool> orientation_inliers(n_orientation_features);
     std::vector<double> homography(9);
 	std::vector<double> vanishing_points(6);
+	gcransac::SIFTRectifyingHomography model;
 
 	findRectifyingHomographySIFT_(
 		scale_features, orientation_features,
 		scale_residual_thresh, orientation_residual_thresh,
 		spatial_coherence_weight, min_iteration_number, max_iteration_number,
 		max_local_optimization_number, scale_inliers, orientation_inliers,
-		homography, vanishing_points, /*verbose_level=*/1
+		homography, vanishing_points, model,
+		/*verbose_level=*/1
 	);
 
     return 0;

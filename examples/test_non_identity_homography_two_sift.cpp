@@ -18,6 +18,14 @@ double gaussianNoise(double mean, double stddev)
     return distribution(generator);
 }
 
+bool coinFlip()
+{
+	std::random_device rd;  // Seed source
+    std::mt19937 gen(rd()); // Mersenne Twister engine
+    std::uniform_int_distribution<> dist(0, 1); // Distribution for {0, 1}
+	return dist(gen);
+}
+
 int main(int argc, char* argv[])
 {
 	int arg_count = 1;
@@ -105,10 +113,12 @@ int main(int argc, char* argv[])
 			// generate rectified features
             double x = 0.5 * kSquareSize * (2 * i + 1);
 			double y = 0.5 * kSquareSize * (2 * j + 1);
-			double t = 0.0 + gaussianNoise(0.0, angle_noise);
+			double t = (coinFlip() ? 0.0 : M_PI_2) + gaussianNoise(0.0, angle_noise);
 			double s = kSquareSize;
             // compute unrectified features
-            gt_model.unrectifyFeature(x, y, t, s);
+			s = gt_model.unrectifiedScale(x, y, s);
+			t = gt_model.unrectifiedAngle(x, y, t);
+            gt_model.unrectifyPoint(x, y);
             // push unrectified features to vector
             scale_features.push_back(x); // x-coordinate
             scale_features.push_back(y); // y-coordinate
@@ -126,6 +136,7 @@ int main(int argc, char* argv[])
 	std::vector<bool> orientation_inliers(num_squares * num_squares);
     std::vector<double> homography(9);
 	std::vector<double> vanishing_points(6);
+	gcransac::SIFTRectifyingHomography model;
 
     findRectifyingHomographySIFT_(
 		scale_features, orientation_features,
@@ -134,7 +145,7 @@ int main(int argc, char* argv[])
 		min_iteration_number, max_iteration_number,
 		max_local_optimization_number,
 		scale_inliers, orientation_inliers,
-		homography, vanishing_points,
+		homography, vanishing_points, model,
 		/*verbose_level=*/2
 	);
 
