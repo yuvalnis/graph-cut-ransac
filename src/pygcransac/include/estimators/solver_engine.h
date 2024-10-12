@@ -78,6 +78,18 @@ public:
 		return true;
 	}
 
+	inline virtual bool isValidModel(
+		[[maybe_unused]] const Model& model,
+		[[maybe_unused]] const DataType& data,
+		[[maybe_unused]] const InlierContainerType& inliers,
+		[[maybe_unused]] const InlierContainerType& minimal_sample,
+		[[maybe_unused]] const ResidualType& threshold,
+		[[maybe_unused]] bool& model_updated
+	) const
+	{
+		return true;
+	}
+
 	// Estimate the model parameters from the given point sample
 	// using weighted fitting if possible.
 	virtual bool estimateModel(

@@ -106,24 +106,18 @@ public:
 
 	// Enable a quick check to see if the model is valid. This can be a geometric
 	// check or some other verification of the model structure.
-	inline virtual bool isValidModel([[maybe_unused]] const Model& model) const
-	{
-		return true;
-	}
+	inline virtual bool isValidModel(const Model& model) const = 0;
 
 	// Enable a quick check to see if the model is valid. This can be a geometric
 	// check or some other verification of the model structure.
 	inline virtual bool isValidModel(
-		[[maybe_unused]] Model& model,
-		[[maybe_unused]] const DataType& data,
-		[[maybe_unused]] const InlierContainerType& inliers,
-		[[maybe_unused]] const InlierContainerType& minimal_sample,
-		[[maybe_unused]] const ResidualType threshold,
-		[[maybe_unused]] bool& model_updated
-	) const
-	{
-		return true;
-	}
+		Model& model,
+		const DataType& data,
+		const InlierContainerType& inliers,
+		const InlierContainerType& minimal_sample,
+		const ResidualType& threshold,
+		bool& model_updated
+	) const = 0;
 };
 
 }

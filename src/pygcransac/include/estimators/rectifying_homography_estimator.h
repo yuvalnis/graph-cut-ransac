@@ -28,6 +28,7 @@ public:
     using Model = typename Base::Model;
     using ResidualDimension = typename Base::ResidualDimension;
     using InlierContainerType = typename Base::InlierContainerType;
+    using ResidualType = typename Base::ResidualType;
     using WeightType = typename Base::WeightType;
     using SampleSizeType = typename Base::SampleSizeType;
     using DataType = typename Base::DataType;
@@ -127,6 +128,26 @@ public:
 	) const override
 	{
 		return solver->isValidSample(data, inliers);
+	}
+
+    inline bool isValidModel([[maybe_unused]] const Model& model) const override
+	{
+		return true;
+	}
+
+	// Enable a quick check to see if the model is valid. This can be a geometric
+	// check or some other verification of the model structure.
+	inline bool isValidModel(
+		[[maybe_unused]] Model& model,
+		[[maybe_unused]] const DataType& data,
+		[[maybe_unused]] const InlierContainerType& inliers,
+		[[maybe_unused]] const InlierContainerType& minimal_sample,
+		[[maybe_unused]] const ResidualType& threshold,
+		[[maybe_unused]] bool& model_updated
+	) const override
+	{
+		return solver->isValidModel(model, data, inliers, minimal_sample,
+                                    threshold, model_updated);
 	}
 
     // Estimating the model from a minimal sample

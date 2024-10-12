@@ -20,6 +20,7 @@ public:
     using InlierContainerType = typename Base::InlierContainerType;
     using DataType = typename Base::DataType;
     using MutableDataType = typename Base::MutableDataType;
+    using ResidualType = typename Base::ResidualType;
     using WeightType = typename Base::WeightType;
 
     RectifyingHomographyThreeSIFTSolver() {}
@@ -40,6 +41,24 @@ public:
 	{
         return !areAllPointsCollinear(*(data[0].get()), inliers[0]);
 	}
+
+    bool isValidModelInternal(
+		const Model& model,
+        const cv::Mat& scale_features,
+        const std::vector<size_t>& scale_inliers
+	) const;
+
+    inline bool isValidModel(
+		const Model& model,
+		const DataType& data,
+		const InlierContainerType& inliers,
+		[[maybe_unused]] const InlierContainerType& minimal_sample,
+		[[maybe_unused]] const ResidualType& threshold,
+		[[maybe_unused]] bool& model_updated
+	) const override
+    {
+        return isValidModelInternal(model, *(data[0].get()), inliers[0]);
+    }
 
     // Estimate the model parameters from the given point sample
     // using weighted fitting if possible.
@@ -140,6 +159,27 @@ bool RectifyingHomographyThreeSIFTSolver::areAllPointsCollinear(
         }
     }
 
+    return true;
+}
+
+bool RectifyingHomographyThreeSIFTSolver::isValidModelInternal(
+    const Model& model,
+    const cv::Mat& scale_features,
+    const std::vector<size_t>& scale_inliers
+) const
+{
+    // the model should not map detected (non-zero) scales to non-positive
+    // scales in the rectified image
+    for (const auto& idx : scale_inliers)
+    {
+        auto x = scale_features.at<double>(idx, x_pos);
+        auto y = scale_features.at<double>(idx, y_pos);
+        auto s = scale_features.at<double>(idx, s_pos);
+        if (model.rectifiedScale(x, y, s) < kEpsilon)
+        {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -368,20 +408,16 @@ bool RectifyingHomographyThreeSIFTSolver::internalNormalizePoints(
         );
         return false;
     }
-    // helper function to fetch correct sample
-    const auto* data_ptr = reinterpret_cast<double*>(data.data);
-    auto get_inlier = [&data_ptr, &data, &inliers](const size_t& i) {
-        const size_t idx = inliers.empty() ? i : inliers[i];
-        return data_ptr + idx * data.cols;
-    };
     // compute mean position of features
     normalizing_transform.x0 = 0.0;
     normalizing_transform.y0 = 0.0;
     for (size_t i = 0; i < inliers.size(); i++)
     {
-        const auto* feature = get_inlier(i);
-        normalizing_transform.x0 += feature[x_pos]; // x-coordinate
-        normalizing_transform.y0 += feature[y_pos]; // y-coordinate
+        auto inlier_idx = inliers[i];
+        auto x = data.at<double>(inlier_idx, x_pos);
+        auto y = data.at<double>(inlier_idx, y_pos);
+        normalizing_transform.x0 += x; // x-coordinate
+        normalizing_transform.y0 += y; // y-coordinate
     }
     const auto inv_n = 1.0 / static_cast<double>(inliers.size());
     normalizing_transform.x0 *= inv_n;
@@ -390,9 +426,11 @@ bool RectifyingHomographyThreeSIFTSolver::internalNormalizePoints(
     double avg_dist = 0.0;
     for (size_t i = 0; i < inliers.size(); i++)
     {
-        const auto* feature = get_inlier(i);
-        const auto dx = feature[0] - normalizing_transform.x0; // x-coordinate
-        const auto dy = feature[1] - normalizing_transform.y0; // y-coordinate
+        auto inlier_idx = inliers[i];
+        auto x = data.at<double>(inlier_idx, x_pos);
+        auto y = data.at<double>(inlier_idx, y_pos);
+        auto dx = x - normalizing_transform.x0; // x-coordinate
+        auto dy = y - normalizing_transform.y0; // y-coordinate
         avg_dist += sqrt(dx * dx + dy * dy);
     }
     avg_dist *= inv_n;
@@ -411,40 +449,28 @@ bool RectifyingHomographyThreeSIFTSolver::internalNormalizePoints(
     normalizing_transform.s = M_SQRT2 / avg_dist;
     // compute normalized features - normalizing is relevant only for coordinates
     // and scale as the scaling of feature positions about the origin is isotropic
-    auto* norm_features_ptr = reinterpret_cast<double*>(normalized_features.data);
-    const auto n_cols = static_cast<size_t>(normalized_features.cols);
     // for (size_t i = 0; i < inliers.size(); i++)
     // {
-    //     const auto* feature = get_inlier(i);
-    //     auto norm_x = feature[x_pos]; // x-coordinate
-    //     auto norm_y = feature[y_pos]; // y-coordinate
-    //     auto norm_scale = feature[s_pos]; // scale
-
-    //     normalizing_transform.normalize(norm_x, norm_y);
-    //     normalizing_transform.normalizeScale(norm_scale);
-
-    //     norm_features_ptr[i * n_cols + x_pos] = norm_x;
-    //     norm_features_ptr[i * n_cols + y_pos] = norm_y;
-    //     norm_features_ptr[i * n_cols + s_pos] = norm_scale;
-    //     // ensures that if the dimension of the features is larger
-    //     // than 3, then the normalization will still succeed.
-    //     for (size_t j = feature_size; j < n_cols; j++)
-    //     {
-	// 		norm_features_ptr[i * n_cols + j] = feature[j];
-    //     }
+    //     auto inlier_idx = inliers[i];
+    //     auto x = data.at<double>(inlier_idx, x_pos);
+    //     auto y = data.at<double>(inlier_idx, y_pos);
+    //     auto scale = data.at<double>(inlier_idx, s_pos);
+    //     normalizing_transform.normalize(x, y);
+    //     normalizing_transform.normalizeScale(scale);
+    //     normalized_features.at<double>(i, x_pos) = x;
+    //     normalized_features.at<double>(i, y_pos) = y;
+    //     normalized_features.at<double>(i, s_pos) = scale;
     // }
 
     for (size_t i = 0; i < inliers.size(); i++)
     {
-        const auto* feature = get_inlier(i);
-        norm_features_ptr[i * n_cols + x_pos] = feature[x_pos];
-        norm_features_ptr[i * n_cols + y_pos] = feature[y_pos];
-        norm_features_ptr[i * n_cols + s_pos] = feature[s_pos];
-
-        for (size_t j = feature_size; j < n_cols; j++)
-        {
-		    norm_features_ptr[i * n_cols + j] = feature[j];
-        }
+        auto inlier_idx = inliers[i];
+        auto x = data.at<double>(inlier_idx, x_pos);
+        auto y = data.at<double>(inlier_idx, y_pos);
+        auto scale = data.at<double>(inlier_idx, s_pos);
+        normalized_features.at<double>(i, x_pos) = x;
+        normalized_features.at<double>(i, y_pos) = y;
+        normalized_features.at<double>(i, s_pos) = scale;
     }
     normalizing_transform.x0 = 0.0;
     normalizing_transform.y0 = 0.0;
