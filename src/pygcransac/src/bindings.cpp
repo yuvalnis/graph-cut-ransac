@@ -4,6 +4,7 @@
 #include <pybind11/stl_bind.h>
 #include <pybind11/numpy.h>
 #include "gcransac_python.h"
+#include "model.h"
 
 namespace py = pybind11;
 
@@ -56,6 +57,7 @@ py::tuple findRectifyingHomographyScaleOnly(
 
 	std::vector<double> cpp_homography(9);
     std::vector<bool> cpp_inliers(num_features);
+	gcransac::ScaleBasedRectifyingHomography model;
 
 	const auto num_inliers = findRectifyingHomographyScaleOnly_(
 		cpp_features,
@@ -66,7 +68,8 @@ py::tuple findRectifyingHomographyScaleOnly(
 		max_iteration_number,
 		max_local_optimization_number,
 		cpp_inliers,
-		cpp_homography
+		cpp_homography,
+		model
 	);
 	// construct python array for inliers from C++ vector
 	py::array_t<bool> inliers = py::array_t<bool>(num_features);
@@ -90,7 +93,7 @@ py::tuple findRectifyingHomographyScaleOnly(
 		homography_ptr[i] = cpp_homography[i];
 	}
 
-    return py::make_tuple(homography, inliers);
+    return py::make_tuple(homography, inliers, model);
 }
 
 py::tuple findRectifyingHomographySIFT(
@@ -173,6 +176,7 @@ py::tuple findRectifyingHomographySIFT(
 	std::vector<double> cpp_vanishing_points(6);
     std::vector<bool> cpp_scale_inliers(num_scale_features);
 	std::vector<bool> cpp_orientation_inliers(num_orientation_features);
+	gcransac::SIFTRectifyingHomography model;
 
 	const auto num_inliers = findRectifyingHomographySIFT_(
 		cpp_scale_features,
@@ -187,7 +191,8 @@ py::tuple findRectifyingHomographySIFT(
 		cpp_scale_inliers,
 		cpp_orientation_inliers,
 		cpp_homography,
-		cpp_vanishing_points
+		cpp_vanishing_points,
+		model
 	);
 	// construct python array for scale inliers from C++ vector
 	py::array_t<bool> scale_inliers = py::array_t<bool>(num_scale_features);
@@ -232,8 +237,10 @@ py::tuple findRectifyingHomographySIFT(
 		vps_ptr[i] = cpp_vanishing_points[i];
 	}
 
-    return py::make_tuple(homography, scale_inliers, orientation_inliers, vanishing_points);
+    return py::make_tuple(homography, scale_inliers, orientation_inliers, vanishing_points, model);
 }
+
+using namespace gcransac;
 
 PYBIND11_PLUGIN(pygcransac) {
 
@@ -255,6 +262,35 @@ PYBIND11_PLUGIN(pygcransac) {
 	// 	.value("PROGRESSIVE_NAPSAC", gcransac::sampler::SamplerType::ProgressiveNapsac)
 	// 	.value("IMPORTANCE", gcransac::sampler::SamplerType::Importance)
 	// 	.value("ADAPTIVE_REORDERING", gcransac::sampler::SamplerType::AdaptiveReordering);
+
+	py::class_<NormalizingTransform>(m, "NormalizingTransform")
+		.def(py::init<>())
+		.def_readwrite("x0", &NormalizingTransform::x0)
+		.def_readwrite("y0", &NormalizingTransform::y0)
+		.def_readwrite("s", &NormalizingTransform::s);
+
+	py::class_<ScaleBasedRectifyingHomography, NormalizingTransform>(m, "ScaleBasedRectifyingHomography")
+		.def(py::init<>())
+		.def_readwrite("h7", &ScaleBasedRectifyingHomography::h7)
+		.def_readwrite("h8", &ScaleBasedRectifyingHomography::h8)
+		.def_readwrite("alpha", &ScaleBasedRectifyingHomography::alpha)
+		.def("rectifiedScale", &ScaleBasedRectifyingHomography::rectifiedScale)
+		.def("unrectifiedScale", &ScaleBasedRectifyingHomography::unrectifiedScale)
+		.def("rectifiedAngle", &ScaleBasedRectifyingHomography::rectifiedAngle)
+		.def("unrectifiedAngle", &ScaleBasedRectifyingHomography::unrectifiedAngle)
+		.def("rectifiedPoint", [](const ScaleBasedRectifyingHomography &self, double x, double y) {
+			self.rectifyPoint(x, y);
+			return py::make_tuple(x, y);
+		}, "Rectify point")
+		.def("unrectifiedPoint", [](const ScaleBasedRectifyingHomography &self, double x, double y) {
+			self.unrectifyPoint(x, y);
+			return py::make_tuple(x, y);
+		}, "Unrectify point");
+
+	py::class_<SIFTRectifyingHomography, ScaleBasedRectifyingHomography>(m, "SIFTRectifyingHomography")
+		.def(py::init<>())
+		.def_readwrite("vanishing_point_dir1", &SIFTRectifyingHomography::vanishing_point_dir1)
+		.def_readwrite("vanishing_point_dir2", &SIFTRectifyingHomography::vanishing_point_dir2);
 
 	m.def("findRectifyingHomographyScaleOnly", &findRectifyingHomographyScaleOnly, R"doc(some doc)doc",
 		py::arg("features"),

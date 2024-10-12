@@ -38,6 +38,7 @@ int findRectifyingHomographyScaleOnly_(
 	size_t max_local_optimization_number,
 	std::vector<bool>& inliers,
 	std::vector<double>& homography,
+	ScaleBasedRectifyingHomography& model,
 	unsigned int verbose_level
 )
 {
@@ -83,7 +84,6 @@ int findRectifyingHomographyScaleOnly_(
 	gcransac.settings.max_local_optimization_number = max_local_optimization_number;
 	gcransac.settings.do_final_iterated_least_squares = true;
 
-	ScaleBasedRectifyingHomography model;
 	GCRANSAC<ModelEstimator, NeighborhoodGraph>::DataType data{
 		std::move(features_ptr)
 	};
@@ -153,7 +153,8 @@ int findRectifyingHomographySIFT_(
 	std::vector<bool>& scale_inliers, // output scale inlier boolean mask
 	std::vector<bool>& orientation_inliers,	// output orientation inlier boolean mask
 	std::vector<double>& homography, // output estimated homography
-	std::vector<double>& vanishing_points, // output vanishing points corresponsing to the estimated homography 
+	std::vector<double>& vanishing_points, // output vanishing points corresponsing to the estimated homography
+	SIFTRectifyingHomography& model,
 	unsigned int verbose_level
 )
 {
@@ -208,7 +209,6 @@ int findRectifyingHomographySIFT_(
 	gcransac.settings.max_local_optimization_number = max_local_optimization_number;
 	gcransac.settings.do_final_iterated_least_squares = true;
 
-	SIFTRectifyingHomography model;
 	GCRANSAC<ModelEstimator, NeighborhoodGraph>::DataType data{
 		std::move(scale_features_ptr), std::move(orientation_features_ptr)
 	};
