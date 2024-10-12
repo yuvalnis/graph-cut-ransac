@@ -221,14 +221,14 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 
 	inline void rectifyPoint(Eigen::Vector3d& p) const
 	{
-		p(2) = h7 * p(0) + h8 * p(1) + p(2);
+		p(2) = -h7 * p(0) - h8 * p(1) + p(2);
 	} 
 
 	inline void unrectifyPoint(Eigen::Vector3d& p) const
 	{
 		// negating h7 and h8 is equivalent to inverting the warping
 		// homography matrix in this case
-		p(2) = -h7 * p(0) - h8 * p(1) + p(2);
+		p(2) = h7 * p(0) + h8 * p(1) + p(2);
 	}
 
 	inline void rectifyPoint(double& x, double& y) const
@@ -252,8 +252,8 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 		constexpr double kTwoPI = 2.0 * M_PI;
 		const auto ct = std::cos(angle);
    		const auto st = std::sin(angle);
-		const auto numer = (x * st - y * ct) * h7 + st;
-		const auto denom = (-x * st + y * ct) * h8 + ct;
+		const auto numer = (x * st - y * ct) * (-h7) + st;
+		const auto denom = (-x * st + y * ct) * (-h8) + ct;
 		return fmod(std::atan2(numer, denom), kTwoPI);
 	}
 
@@ -264,8 +264,8 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
    		const auto st = std::sin(angle);
 		// negating h7 and h8 is equivalent to inverting the warping
 		// homography matrix in this case
-		const auto numer = (x * st - y * ct) * (-h7) + st;
-		const auto denom = (-x * st + y * ct) * (-h8) + ct;
+		const auto numer = (x * st - y * ct) * h7 + st;
+		const auto denom = (-x * st + y * ct) * h8 + ct;
 		return fmod(std::atan2(numer, denom), kTwoPI);
 	}
 
@@ -279,20 +279,6 @@ struct ScaleBasedRectifyingHomography : public NormalizingTransform
 		// negating h7 and h8 is equivalent to inverting the warping
 		// homography matrix in this case
 		return scale * std::pow(-h7 * x - h8 * y + 1.0, 3.0);
-	}
-
-	void rectifyFeature(double& x, double& y, double& angle, double& scale) const
-	{
-		angle = rectifiedAngle(x, y, angle);
-		scale = rectifiedScale(x, y, scale);
-		rectifyPoint(x, y);
-	}
-
-	void unrectifyFeature(double& x, double& y, double& angle, double& scale) const
-	{
-		angle = unrectifiedAngle(x, y, angle);
-		scale = unrectifiedScale(x, y, scale);
-		unrectifyPoint(x, y);
 	}
 
 	Eigen::Matrix3d getHomography() const
