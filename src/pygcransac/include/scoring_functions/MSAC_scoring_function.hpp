@@ -106,24 +106,26 @@ public:
 		}
 
 		// return score values to MSAC ones and sum them up to get final score
+		const auto sample_sizes = estimator.sampleSize();
 		for (size_t i = 0; i < NumInlierTypes::value; i++)
 		{
 			const auto& n_inliers = score.num_inliers_by_type(i);
-			if (n_inliers == 0)
+			if (n_inliers < sample_sizes[i])
 			{
-				continue;
+				// if score involves less inliers than minimal model requires,
+				// reset it to worst score (zero).
+				score = ScoreType{};
+				break;
 			}
-			const auto normed_score = score.value_by_type(i) /
-									  sqr_truncated_thresholds(i);
-			const auto msac_score = normed_score + static_cast<double>(n_inliers);
-			score.reset_value(i, msac_score);
+			else
+			{
+				const auto normed_score = score.value_by_type(i) /
+										  sqr_truncated_thresholds(i);
+				const auto msac_score = normed_score + static_cast<double>(n_inliers);
+				score.reset_value(i, msac_score);
+			}
 		}
-		// TODO remove
-		if (NumInlierTypes::value == 2 && score.num_inliers_by_type(1) < 2)
-		{
-			throw std::runtime_error("Less than two orientation inliers!");
-		}
-
+		
 		return score;
 	}
 
