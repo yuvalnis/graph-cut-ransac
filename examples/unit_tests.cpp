@@ -267,6 +267,208 @@ void testPointOnVertexOfConvexPolygon()
     }
 }
 
+void testLineFromPointAndAngle()
+{
+    using namespace gcransac::utils;
+    auto line = lineFromPointAndAngle(0.0, 0.0, 0.0);
+    Eigen::Vector3d point{1.0, 0.0, 1.0}; 
+    double dist = std::abs(line.dot(point));
+    if (dist > 1e-9)
+    {
+        std::stringstream error_msg;
+        error_msg << "Line intersecting (0, 0) and angle 0 did not intersect "
+                     "(1, 0). The distance to it is " << dist << std::endl;
+        throw std::runtime_error(error_msg.str());
+    }
+    point = {-1.0, 1.0, 1.0};
+    dist = std::abs(line.dot(point));
+    if (std::abs(dist - 1.0) > 1e-9)
+    {
+        std::stringstream error_msg;
+        error_msg << "Line intersecting (0, 0) and angle 0 is not 1 unit of "
+                     "distance distance away from (-1, 1). The distance is "
+                  <<  dist << std::endl;
+        throw std::runtime_error(error_msg.str());
+    }
+    auto other_line = lineFromPointAndAngle(1.0, 1.0, M_PI_2);
+    auto intersection = line.cross(other_line);
+    if (std::abs(intersection(2)) < 1e-9)
+    {
+        std::stringstream error_msg;
+        error_msg << "Intersection of lines is a point at infinity.\n";
+        throw std::runtime_error(error_msg.str());
+    }
+    intersection /= intersection(2);
+    // subtract the expected intersection from the result
+    Eigen::Vector3d expected{1.0, 0.0, 1.0};
+    // check if result minus the expected intersection has zero length
+    if ((intersection - expected).norm() > 1e-9)
+    {
+        std::stringstream error_msg;
+        error_msg << "Intersection of lines is expected to be "
+                     "(" << expected(0) << ", " << expected(1) << "). Received "
+                     "(" << intersection(0) << ", " << intersection(1) << ").\n";
+        throw std::runtime_error(error_msg.str());
+    }
+}
+
+void testDegreesToRadians()
+{
+    using namespace gcransac::utils;
+    constexpr double kEpsilon = 1e-9;
+    constexpr double kDegs = 90.0;
+    constexpr double kRads = M_PI_2;
+    auto result = deg2rad(kDegs);
+    if (std::abs(result - kRads) > kEpsilon)
+    {
+        std::stringstream error_msg;
+        error_msg << "deg2rad(" << kDegs << ") returned " << result << ". "
+                     "Expected " << kRads << ".\n";
+        throw std::runtime_error(error_msg.str());
+    }
+    result = rad2deg(kRads);
+    if (std::abs(result - kDegs) > kEpsilon)
+    {
+        std::stringstream error_msg;
+        error_msg << "rad2deg(" << kRads << ") returned " << result << ". "
+                     "Expected " << kDegs << ".\n";
+        throw std::runtime_error(error_msg.str());
+    }
+    result = rad2deg(deg2rad(kDegs));
+    if (std::abs(result - kDegs) > kEpsilon)
+    {
+        std::stringstream error_msg;
+        error_msg << "rad2deg(deg2rad(" << kDegs << ")) returned " << result
+                  << ". Expected " << kDegs << ".\n";
+        throw std::runtime_error(error_msg.str());
+    }
+}
+
+void testClipAngle()
+{
+    using namespace gcransac::utils;
+    const std::array<double, 5> input = {-M_PI_2, 0.7861, 0.0, 2.7 * M_PI, -M_PI};
+    const std::array<double, 5> expected = {1.5 * M_PI, 0.7861, 0.0, 0.7 * M_PI, M_PI};
+    for (size_t i = 0; i < input.size(); i++)
+    {
+        auto result = clipAngle(input[i]);
+        if (std::fabs(result - expected[i]) > 1e-9)
+        {
+            std::stringstream error_msg;
+            error_msg << "clipAngle(" << input[i] << ") expected to return "
+                      << expected[i] << ", but returned " << result
+                      << " instead.\n";
+            throw std::runtime_error(error_msg.str());
+        }
+    }
+}
+
+void testMinAngleDiff()
+{
+    using namespace gcransac::utils;
+    std::vector<std::pair<double, double>> input;
+    std::vector<double> expected;
+    
+    input.emplace_back(0.0, 0.0);
+    expected.push_back(0.0);
+
+    input.emplace_back(-M_PI_2, 0.0);
+    expected.push_back(M_PI_2);
+
+    input.emplace_back(-3.48 * M_PI, 7.41 * M_PI);
+    expected.push_back(0.89 * M_PI);
+
+    input.emplace_back(0.25 * M_PI, 1.25 * M_PI);
+    expected.push_back(M_PI);
+
+    for (size_t i = 0; i < input.size(); i++)
+    {
+        double angle1 = input.at(i).first;
+        double angle2 = input.at(i).second;
+        double result = minAngleDiff(angle1, angle2);
+        if (std::fabs(result - expected.at(i)) > 1e-9)
+        {
+            std::stringstream error_msg;
+            error_msg << "minAngleDiff(" << angle1 << ", " << angle2 << ") "
+                      << "expected to return " << expected.at(i) << ", but "
+                      << "returned " << result << " instead.\n";
+            throw std::runtime_error(error_msg.str());
+        }
+    }
+}
+
+void testLinesAnglesDiff()
+{
+    using namespace gcransac::utils;
+    std::vector<std::pair<double, double>> input;
+    std::vector<double> expected;
+
+    input.emplace_back(0.0, 0.0);
+    expected.push_back(0.0);
+
+    input.emplace_back(-M_PI_2, 0.0);
+    expected.push_back(M_PI_2);
+
+    input.emplace_back(0.52 * M_PI, 1.49 * M_PI);
+    expected.push_back(0.03 * M_PI);
+
+    input.emplace_back(1.49 * M_PI, 0.52 * M_PI);
+    expected.push_back(0.03 * M_PI);
+
+    input.emplace_back(-3.48 * M_PI, 5.60 * M_PI);
+    expected.push_back(0.08 * M_PI);
+
+    input.emplace_back(0.25 * M_PI, 1.25 * M_PI);
+    expected.push_back(0.0);
+
+    for (size_t i = 0; i < input.size(); i++)
+    {
+        double angle1 = input.at(i).first;
+        double angle2 = input.at(i).second;
+        double result = linesAnglesDiff(angle1, angle2);
+        if (std::fabs(result - expected.at(i)) > 1e-9)
+        {
+            std::stringstream error_msg;
+            error_msg << "linesAnglesDiff2(" << angle1 << ", " << angle2 << ") "
+                      << "expected to return " << expected.at(i) << ", but "
+                      << "returned " << result << " instead.\n";
+            throw std::runtime_error(error_msg.str());
+        }
+    }
+}
+
+void testNChoose2()
+{
+    using namespace gcransac::utils;
+    size_t expected = 15;
+    auto result = nChoose2(6);
+    if (result != expected)
+    {
+        std::stringstream error_msg;
+        error_msg << "nChoose2(6)) returned " << result << ". Expected "
+                  << expected << ".\n";
+        throw std::runtime_error(error_msg.str());
+    }
+    expected = 0;
+    result = nChoose2(1);
+    if (result != expected)
+    {
+        std::stringstream error_msg;
+        error_msg << "nChoose2(1)) returned " << result << ". Expected "
+                  << expected << ".\n";
+        throw std::runtime_error(error_msg.str());
+    }
+    expected = 0;
+    result = nChoose2(0);
+    if (result != expected)
+    {
+        std::stringstream error_msg;
+        error_msg << "nChoose2(0)) returned " << result << ". Expected "
+                  << expected << ".\n";
+        throw std::runtime_error(error_msg.str());
+    }
+}
+
 void runTest(const std::string& desc, void (*test)())
 {
     static size_t index{0};
@@ -295,4 +497,10 @@ int main()
     runTest("point outside convex-polygon", testPointOutsideConvexPolygon);
     runTest("point on edge of convex-polygon", testPointOnEdgeOfConvexPolygon);
     runTest("point on vertex of convex-polygon", testPointOnVertexOfConvexPolygon);
+    runTest("Line from point and angle", testLineFromPointAndAngle);
+    runTest("degrees to radians", testDegreesToRadians);
+    runTest("clip angle", testClipAngle);
+    runTest("minimal angle difference", testMinAngleDiff);
+    runTest("lines angles difference", testLinesAnglesDiff);
+    runTest("n choose 2", testNChoose2);
 }

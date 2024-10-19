@@ -42,21 +42,58 @@
 namespace gcransac::utils
 {
 
-inline size_t nChoose2(const size_t& n)
+constexpr size_t nChoose2(size_t n)
 {
+    if (n == 0)
+    {
+        return 0;
+    }
     return (n * (n - 1)) / 2;
 }
 
-double deg2rad(double angle)
+constexpr double deg2rad(double angle)
 {
     constexpr double kDegToRad{M_PI / 180.0};
     return angle * kDegToRad;
 }
 
-double rad2deg(double angle)
+constexpr double rad2deg(double angle)
 {
     constexpr double kRadToDeg{M_1_PI * 180.0};
     return angle * kRadToDeg;
+}
+
+inline double clipAngle(double angle)
+{
+    constexpr auto kTwoPI = 2.0 * M_PI;
+    // Get the remainder when divided by 2π
+    angle = std::fmod(angle, kTwoPI);
+    if (angle < 0.0) {
+    // If the angle is negative, bring it to the positive range
+        angle += kTwoPI;  
+    }
+    return angle;
+}
+
+inline double minAngleDiff(double angle1, double angle2)
+{
+    constexpr auto kTwoPI = 2.0 * M_PI;
+    auto diff = std::fabs(clipAngle(angle1) - clipAngle(angle2));
+    return std::fmin(diff, kTwoPI - diff);
+}
+
+inline double linesAnglesDiff(double angle1, double angle2)
+{
+    auto diff1 = minAngleDiff(angle1, angle2);
+    auto diff2 = minAngleDiff(angle1, angle2 - M_PI);
+    return std::fmin(diff1, diff2);
+}
+
+inline Eigen::Vector3d lineFromPointAndAngle(double x, double y, double theta)
+{
+    const auto c = std::cos(theta);
+    const auto s = std::sin(theta);
+    return {s, -c, y * c - x * s};
 }
 
 class Point2D
@@ -86,7 +123,7 @@ private:
     double m_y;
 };
 
-bool areCollinear(
+inline bool areCollinear(
 	double x1, double y1, double x2, double y2, double x3, double y3,
 	double tolerance
 )
@@ -204,7 +241,7 @@ inline double crossProduct(const Point2D& O, const Point2D& P, const Point2D& Q)
 /// @param points a set of points, represented by a vector of Point2D.
 /// @return A polygon, represented by a vector of Point2D, which forms the
 /// convex-hull of points.
-std::vector<Point2D> computeConvexHull(std::vector<Point2D>& points)
+inline std::vector<Point2D> computeConvexHull(std::vector<Point2D>& points)
 {
     const size_t n_points = points.size();
     if (n_points <= 1)
@@ -256,7 +293,7 @@ std::vector<Point2D> computeConvexHull(std::vector<Point2D>& points)
 /// @param polygon a collection of 2D-points representing the vertices of a
 /// convex polygon.
 /// @return True, if the point is inside the polygon. False, otherwise.
-bool pointInConvexPolygon(
+inline bool pointInConvexPolygon(
     const Point2D& point,
     const std::vector<Point2D>& polygon
 )
