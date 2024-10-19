@@ -269,28 +269,34 @@ PYBIND11_PLUGIN(pygcransac) {
 		.def_readwrite("y0", &NormalizingTransform::y0)
 		.def_readwrite("s", &NormalizingTransform::s);
 
-	py::class_<ScaleBasedRectifyingHomography, NormalizingTransform>(m, "ScaleBasedRectifyingHomography")
+	py::class_<RectifyingHomography, NormalizingTransform>(m, "RectifyingHomography")
 		.def(py::init<>())
-		.def_readwrite("h7", &ScaleBasedRectifyingHomography::h7)
-		.def_readwrite("h8", &ScaleBasedRectifyingHomography::h8)
-		.def_readwrite("alpha", &ScaleBasedRectifyingHomography::alpha)
-		.def("rectifiedScale", &ScaleBasedRectifyingHomography::rectifiedScale)
-		.def("unrectifiedScale", &ScaleBasedRectifyingHomography::unrectifiedScale)
-		.def("rectifiedAngle", &ScaleBasedRectifyingHomography::rectifiedAngle)
-		.def("unrectifiedAngle", &ScaleBasedRectifyingHomography::unrectifiedAngle)
-		.def("rectifiedPoint", [](const ScaleBasedRectifyingHomography &self, double x, double y) {
+		.def_readwrite("h7", &RectifyingHomography::h7)
+		.def_readwrite("h8", &RectifyingHomography::h8)
+		.def("rectifiedScale", &RectifyingHomography::rectifiedScale)
+		.def("unrectifiedScale", &RectifyingHomography::unrectifiedScale)
+		.def("rectifiedAngle", &RectifyingHomography::rectifiedAngle)
+		.def("unrectifiedAngle", &RectifyingHomography::unrectifiedAngle)
+		.def("rectifiedPoint", [](const RectifyingHomography &self, double x, double y) {
 			self.rectifyPoint(x, y);
 			return py::make_tuple(x, y);
 		}, "Rectify point")
-		.def("unrectifiedPoint", [](const ScaleBasedRectifyingHomography &self, double x, double y) {
+		.def("unrectifiedPoint", [](const RectifyingHomography &self, double x, double y) {
 			self.unrectifyPoint(x, y);
 			return py::make_tuple(x, y);
 		}, "Unrectify point");
 
-	py::class_<SIFTRectifyingHomography, ScaleBasedRectifyingHomography>(m, "SIFTRectifyingHomography")
+	py::class_<ScaleBasedRectifyingHomography, RectifyingHomography>(m, "ScaleBasedRectifyingHomography")
 		.def(py::init<>())
-		.def_readwrite("vanishing_point_dir1", &SIFTRectifyingHomography::vanishing_point_dir1)
-		.def_readwrite("vanishing_point_dir2", &SIFTRectifyingHomography::vanishing_point_dir2);
+		.def_readwrite("alpha", &ScaleBasedRectifyingHomography::alpha);
+
+	py::class_<OrientationBasedRectifyingHomography, RectifyingHomography>(m, "OrientationBasedRectifyingHomography")
+		.def(py::init<>())
+		.def_readwrite("vanishing_point_dir1", &OrientationBasedRectifyingHomography::vanishing_point_dir1)
+		.def_readwrite("vanishing_point_dir2", &OrientationBasedRectifyingHomography::vanishing_point_dir2);
+
+	py::class_<SIFTRectifyingHomography, ScaleBasedRectifyingHomography, OrientationBasedRectifyingHomography>(m, "SIFTRectifyingHomography")
+		.def(py::init<>());
 
 	m.def("findRectifyingHomographyScaleOnly", &findRectifyingHomographyScaleOnly, R"doc(some doc)doc",
 		py::arg("features"),
