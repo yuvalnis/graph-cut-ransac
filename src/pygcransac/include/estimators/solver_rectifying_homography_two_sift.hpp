@@ -51,6 +51,12 @@ public:
 		[[maybe_unused]] bool& model_updated
 	) const override
     {
+        constexpr double kValidHValue{1e-3};
+        auto h_abs_max = std::fmax(std::fabs(model.h7), std::fabs(model.h8));
+        if (h_abs_max >= kValidHValue)
+        {
+            return false;
+        }
         return isValidModelInternal(model, *(data[scale_set_idx].get()),
                                     inliers[scale_set_idx]);
     }
