@@ -94,19 +94,12 @@ protected:
     static constexpr size_t y_pos = 1; // y-coordinate position
     static constexpr size_t t_pos = 2; // orientation position
     static constexpr size_t s_pos = 2; // scale position
-    static constexpr size_t feature_size = 3;
     static constexpr size_t scale_set_idx = 0;
     static constexpr size_t orient_set_idx = 1;
 
     static void setScaleConstraint(
         double x, double y, double scale, size_t row_idx,
         Eigen::Matrix<double, 3, 4>& coeffs
-    );
-
-    static void setOrientationConstraint(
-        double x1, double y1, double theta1,
-        double x2, double y2, double theta2,
-        size_t row_idx, Eigen::Matrix<double, 3, 4>& coeffs
     );
 
     static void setScaleConstraint(
@@ -119,10 +112,6 @@ protected:
         double x2, double y2, double theta2, double weight2,
         size_t row_idx, Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs,
         Eigen::VectorXd& rhs
-    );
-
-    static double rectifiedAngle(
-        double x, double y, double theta, const SIFTRectifyingHomography& model
     );
 
     bool estimateNonMinimalModel(
@@ -143,29 +132,6 @@ protected:
         std::vector<SIFTRectifyingHomography>& models
     ) const;
 };
-
-Eigen::Vector3d lineFromSIFT(double x, double y, double theta)
-{
-    const auto c = std::cos(theta);
-    const auto s = std::sin(theta);
-    return {s, -c, y * c - x * s};
-}
-
-/// @brief Computes the minimal angular difference between two angles while
-/// treating each angle and its opposite angle as equivalent.
-/// @param angle1 first angle as angle in range [0, 2 * PI)
-/// @param angle2 second angle as angle in range [0, 2 * PI)
-/// @return The minimal angular difference between the two angles.
-double absoluteAngleDiff(const double& angle1, const double& angle2)
-{
-    constexpr auto kTwoPI = 2.0 * M_PI;
-    auto diff1 = std::fabs(angle1 - angle2);
-    auto diff2 = std::fabs(angle1 - angle2 - M_PI); // flipping second orientation
-    return std::fmin(
-        std::fmin(diff1, kTwoPI - diff1),
-        std::fmin(diff2, kTwoPI - diff2)
-    );
-}
 
 bool RectifyingHomographyTwoSIFTSolver::isValidSample(
     const DataType& data,
@@ -193,13 +159,13 @@ bool RectifyingHomographyTwoSIFTSolver::isValidSample(
     auto x1 = orient_features->at<double>(idx, x_pos);
     auto y1 = orient_features->at<double>(idx, y_pos);
     auto t1 = orient_features->at<double>(idx, t_pos);
-    auto l1 = lineFromSIFT(x1, y1, t1);
+    auto l1 = utils::lineFromPointAndAngle(x1, y1, t1);
     // compute line from second orientation feature
     idx = orient_inliers.at(1);
     auto x2 = orient_features->at<double>(idx, x_pos);
     auto y2 = orient_features->at<double>(idx, y_pos);
     auto t2 = orient_features->at<double>(idx, t_pos);
-    auto l2 = lineFromSIFT(x2, y2, t2);
+    auto l2 = utils::lineFromPointAndAngle(x2, y2, t2);
     // compute vanishing point
     auto vp = l1.cross(l2); // intersection of lines is vanishing point
     if ((vp.array().cwiseAbs() < 1e-6).all())
@@ -289,14 +255,14 @@ bool RectifyingHomographyTwoSIFTSolver::isValidSample(
 //         auto xi = orient_features->at<double>(idx_i, x_pos);
 //         auto yi = orient_features->at<double>(idx_i, y_pos);
 //         auto ti = orient_features->at<double>(idx_i, t_pos);
-//         auto li = lineFromSIFT(xi, yi, ti);
+//         auto li = lineFromPointAndAngle(xi, yi, ti);
 //         for (size_t j = i + 1; j < orient_inliers.size(); j++)
 //         {
 //             auto idx_j = orient_inliers.at(j);
 //             auto xj = orient_features->at<double>(idx_j, x_pos);
 //             auto yj = orient_features->at<double>(idx_j, y_pos);
 //             auto tj = orient_features->at<double>(idx_j, t_pos);
-//             auto lj = lineFromSIFT(xj, yj, tj);
+//             auto lj = lineFromPointAndAngle(xj, yj, tj);
 //             auto vp = li.cross(lj); // intersection of lines is vanishing point
 //             if ((vp.array().cwiseAbs() < 1e-6).all())
 //             {
@@ -358,26 +324,6 @@ void RectifyingHomographyTwoSIFTSolver::setScaleConstraint(
     coeffs(row_idx, 3) = -1.0;
 }
 
-void RectifyingHomographyTwoSIFTSolver::setOrientationConstraint(
-    double x1, double y1, double theta1,
-    double x2, double y2, double theta2,
-    size_t row_idx, Eigen::Matrix<double, 3, 4>& coeffs
-)
-{
-    const auto l1 = lineFromSIFT(x1, y1, theta1);
-    const auto l2 = lineFromSIFT(x2, y2, theta2);
-    auto vp = l1.cross(l2); // intersection of lines is vanishing point
-    const auto max_abs_value = vp.cwiseAbs().maxCoeff();
-    if (max_abs_value > 1.0)
-    {
-        vp /= max_abs_value;
-    }
-    coeffs(row_idx, 0) = vp(0);
-    coeffs(row_idx, 1) = vp(1);
-    coeffs(row_idx, 2) = 0;
-    coeffs(row_idx, 3) = -vp(2);
-}
-
 void RectifyingHomographyTwoSIFTSolver::setScaleConstraint(
     double x, double y, double scale, double weight, size_t row_idx, 
     Eigen::Matrix<double, Eigen::Dynamic, 3>& coeffs, Eigen::VectorXd& rhs
@@ -397,8 +343,8 @@ void RectifyingHomographyTwoSIFTSolver::setOrientationConstraint(
 )
 {
     const auto w = weight1 * weight2;
-    const auto l1 = lineFromSIFT(x1, y1, theta1);
-    const auto l2 = lineFromSIFT(x2, y2, theta2);
+    const auto l1 = utils::lineFromPointAndAngle(x1, y1, theta1);
+    const auto l2 = utils::lineFromPointAndAngle(x2, y2, theta2);
     auto vp = l1.cross(l2); // intersection of lines is vanishing point
     const auto max_abs_value = vp.cwiseAbs().maxCoeff();
     if (max_abs_value > 1.0)
@@ -409,19 +355,6 @@ void RectifyingHomographyTwoSIFTSolver::setOrientationConstraint(
     coeffs(row_idx, 1) = w * vp(1);
     coeffs(row_idx, 2) = 0.0;
     rhs(row_idx) = -w * vp(2);
-}
-
-double RectifyingHomographyTwoSIFTSolver::rectifiedAngle(
-    double x, double y, double theta, const SIFTRectifyingHomography& model
-)
-{
-    double rect_angle = model.rectifiedAngle(x, y, theta);
-    rect_angle = fmod(rect_angle, M_PI);
-    if (std::signbit(rect_angle))
-    {
-        rect_angle += 2.0 * M_PI;
-    }
-    return rect_angle;
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
@@ -449,19 +382,18 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     }
        
     Eigen::Matrix<double, 3, 4> coeffs;
-    size_t row_idx = 0;
 
     auto inlier_idx = scale_inliers[0];
     double x = scale_features->at<double>(inlier_idx, x_pos);
     double y = scale_features->at<double>(inlier_idx, y_pos);
     double s = scale_features->at<double>(inlier_idx, s_pos);
-    setScaleConstraint(x, y, s, row_idx++, coeffs);
+    setScaleConstraint(x, y, s, 0, coeffs);
 
     inlier_idx = scale_inliers[1];
     x = scale_features->at<double>(inlier_idx, x_pos);
     y = scale_features->at<double>(inlier_idx, y_pos);
     s = scale_features->at<double>(inlier_idx, s_pos);
-    setScaleConstraint(x, y, s, row_idx++, coeffs);
+    setScaleConstraint(x, y, s, 1, coeffs);
 
     inlier_idx = orient_inliers[0];
     double x1 = orientation_features->at<double>(inlier_idx, x_pos);
@@ -473,9 +405,13 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     double y2 = orientation_features->at<double>(inlier_idx, y_pos);
     double theta2 = orientation_features->at<double>(inlier_idx, t_pos);
 
-    setOrientationConstraint(
-        x1, y1, theta1, x2, y2, theta2, row_idx++, coeffs
-    );
+    auto l1 = utils::lineFromPointAndAngle(x1, y1, theta1);
+    auto l2 = utils::lineFromPointAndAngle(x2, y2, theta2);
+    auto vp = l1.cross(l2); // intersection of lines is vanishing point
+    coeffs(2, 0) = vp(0);
+    coeffs(2, 1) = vp(1);
+    coeffs(2, 2) = 0;
+    coeffs(2, 3) = -vp(2);
 
     Eigen::Matrix<double, 3, 1> solution;
     gcransac::utils::gaussElimination<3>(coeffs, solution);
@@ -492,22 +428,22 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     {
         return false;
     }
-    const auto rectified_t1 = rectifiedAngle(x1, y1, theta1, model);
-    const auto rectified_t2 = rectifiedAngle(x2, y2, theta2, model);
-    if (absoluteAngleDiff(rectified_t1, rectified_t2) > utils::deg2rad(1.0))
+    // Compute the directions of the vanishing points.
+    // Vanishing point should be mapped to infinity in rectified image.
+    // Model is for warping homography, so we "unrectify" the vanishing point
+    // to map it to the rectified image.
+    model.unrectifyPoint(vp);
+    if (std::abs(vp[2]) > kEpsilon)
     {
-        // fprintf(
-        //     stderr, 
-        //     "Invalid solution for the minimal case: rectified angles are not "
-        //     "parallel (angle #1: %f, angle #2: %f, h7: %f, h8: %f).\n",
-        //     utils::rad2deg(rectified_t1), utils::rad2deg(rectified_t2),
-        //     model.h7, model.h8
-        // );
         return false;
     }
-    model.vanishing_point_dir1 = 0.5 * (rectified_t1 + rectified_t2);
+    model.vanishing_point_dir1 = utils::clipAngle(std::atan2(vp[1], vp[0]));
     // the second vanishing point's direction is orthogonal to the first.
-    model.vanishing_point_dir2 = fmod(model.vanishing_point_dir1 + M_PI_2, M_PI);
+    // TODO need to determine if second vanishing point's direction is plus or
+    // minus 90 degrees. This is only for the final vanishing point display,
+    // and otherwise shouldn't affect performance.
+    model.vanishing_point_dir2 = utils::clipAngle(model.vanishing_point_dir1 + M_PI_2);
+
     models.emplace_back(model);
     return true;
 } 
@@ -523,7 +459,7 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
 double findWeightedMode(
     const std::vector<double>& angles,
     const std::vector<double>& weights,
-    const double& bin_width
+    double bin_width
 )
 {
     if (angles.size() != weights.size() || angles.empty()) {
@@ -562,6 +498,33 @@ double findWeightedMode(
     return mode;
 }
 
+size_t nonZeroWeightInliers(
+    const std::vector<size_t>& inliers,
+    const std::vector<double>& weights,
+    std::vector<size_t>& result
+)
+{
+    if (weights.empty())
+    {
+        result = inliers;
+        return result.size();
+    }
+    if (inliers.size() != weights.size())
+    {
+        throw std::runtime_error(
+            "nonZeroWeightInliers: number of weights and inliers is different."
+        );
+    }
+    for (size_t i = 0; i < inliers.size(); i++)
+    {
+        if (weights.at(i) > 1e-9)
+        {
+            result.push_back(inliers.at(i));
+        }
+    }
+    return result.size();
+}
+
 bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     const std::unique_ptr<const cv::Mat>& scale_features,
     const std::vector<size_t>& scale_inliers,
@@ -575,8 +538,14 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     using namespace std;
     const auto kBinWidth = utils::deg2rad(0.5); // half-degree in radians
 
-    const auto n_scale_constraints = scale_inliers.size();
-    const auto n_orientation_constraints = utils::nChoose2(orient_inliers.size());
+    std::vector<size_t> actual_scale_inliers;
+    std::vector<size_t> actual_orient_inliers;
+    auto n_scale_inliers = nonZeroWeightInliers(scale_inliers, scale_weights,
+                                                actual_scale_inliers);
+    auto n_orient_inliers = nonZeroWeightInliers(orient_inliers, orient_weights,
+                                                 actual_orient_inliers);
+    const auto n_scale_constraints = n_scale_inliers;
+    const auto n_orientation_constraints = utils::nChoose2(n_orient_inliers);
     // make sure there are enough constraints from each type to estimate the model.
     if (n_scale_constraints < 2 || n_orientation_constraints < 1)
     {
@@ -590,43 +559,19 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
         );
         return false;
     }
-    if (!scale_weights.empty() && scale_weights.size() != scale_inliers.size())
-    {
-        fprintf(
-            stderr,
-            "Bad scale-weights container in non-minimal model. Container "
-            "should be either empty (signifies uniform weights by default), or "
-            "should be in the same size as the scale-inliers container. "
-            "There are %ld weights and %ld inliers.\n",
-            scale_weights.size(), scale_inliers.size()
-        );
-        return false;
-    }
-    if (!orient_weights.empty() && orient_weights.size() != orient_inliers.size())
-    {
-        fprintf(
-            stderr,
-            "Bad orientation-weights container in non-minimal model. Container "
-            "should be either empty (signifies uniform weights by default), or "
-            "should be in the same size as the orientation-inliers container. "
-            "There are %ld weights and %ld inliers.\n",
-            orient_weights.size(), orient_inliers.size()
-        );
-        return false;
-    }
     // helper function to fetch correct weights
-    auto get_scale_weight = [&scale_inliers, &scale_weights](
+    auto get_scale_weight = [&actual_scale_inliers, &scale_weights](
         const size_t& feature_idx
     )
     {
-        const size_t& idx = scale_inliers[feature_idx];
+        const size_t& idx = actual_scale_inliers[feature_idx];
         return scale_weights.empty() ? 1.0 : scale_weights[idx];
     };
-    auto get_orientation_weight = [&orient_inliers, &orient_weights](
+    auto get_orientation_weight = [&actual_orient_inliers, &orient_weights](
         const size_t& feature_idx
     )
     {
-        const size_t& idx = orient_inliers[feature_idx];
+        const size_t& idx = actual_orient_inliers[feature_idx];
         return orient_weights.empty() ? 1.0 : orient_weights[idx];
     };
     // the number of rows in the coefficient matrix is the total number of constraints.
@@ -638,9 +583,9 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     // constraints derived from positions and scales
     size_t curr_idx{0};
     size_t inlier_idx{0};
-    for (size_t i = 0; i < scale_inliers.size(); i++)
+    for (size_t i = 0; i < actual_scale_inliers.size(); i++)
     {
-        inlier_idx = scale_inliers[i];
+        inlier_idx = actual_scale_inliers[i];
         auto x = scale_features->at<double>(inlier_idx, x_pos);
         auto y = scale_features->at<double>(inlier_idx, y_pos);
         auto scale = scale_features->at<double>(inlier_idx, s_pos);
@@ -649,16 +594,16 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     }
     // populate last "sample_size choose 2" rows of coeffs and rhs matrices
     // with the constraints derived from positions and orientations
-    for (size_t i = 0; i < orient_inliers.size() - 1; i++)
+    for (size_t i = 0; i < actual_orient_inliers.size() - 1; i++)
     {
-        inlier_idx = orient_inliers[i];
+        inlier_idx = actual_orient_inliers[i];
         auto xi = orient_features->at<double>(inlier_idx, x_pos); 
         auto yi = orient_features->at<double>(inlier_idx, y_pos); 
         auto ti = orient_features->at<double>(inlier_idx, t_pos);
         auto wi = get_orientation_weight(i);
-        for (size_t j = i + 1; j < orient_inliers.size(); j++)
+        for (size_t j = i + 1; j < actual_orient_inliers.size(); j++)
         {
-            inlier_idx = orient_inliers[j];
+            inlier_idx = actual_orient_inliers[j];
             auto xj = orient_features->at<double>(inlier_idx, x_pos); 
             auto yj = orient_features->at<double>(inlier_idx, y_pos); 
             auto tj = orient_features->at<double>(inlier_idx, t_pos);
@@ -697,22 +642,46 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     {
         return false;
     }
-    std::vector<double> rectified_angles(orient_inliers.size(), 0.0);
-    std::vector<double> angle_weights(orient_inliers.size(), 0.0);
-    for (size_t i = 0; i < orient_inliers.size(); i++)
+    std::vector<double> rectified_angles(actual_orient_inliers.size(), 0.0);
+    std::vector<double> angle_weights(actual_orient_inliers.size(), 0.0);
+    double weights_sum{0};
+    for (size_t i = 0; i < actual_orient_inliers.size(); i++)
     {
-        auto inlier_idx = orient_inliers[i];
+        auto inlier_idx = actual_orient_inliers[i];
         auto x = orient_features->at<double>(inlier_idx, x_pos);
         auto y = orient_features->at<double>(inlier_idx, y_pos);
         auto theta = orient_features->at<double>(inlier_idx, t_pos);
-        rectified_angles.at(i) = rectifiedAngle(x, y, theta, model);
-        angle_weights.at(i) = get_orientation_weight(i);
+        rectified_angles.at(i) = model.rectifiedAngle(x, y, theta);
+        double weight = get_orientation_weight(i);
+        angle_weights.at(i) = weight;
+        weights_sum += weight;
     }
-    model.vanishing_point_dir1 = findWeightedMode(
+    if (weights_sum < kEpsilon)
+    {
+        fprintf(
+            stderr,
+            "Error in non-minimal solver: sum of weights (%f) is considered "
+            "non-positive.\n", weights_sum
+        );
+        return false;
+    }
+    // normalize angle and weights for mode computation
+    for (size_t i = 0; i < actual_orient_inliers.size(); i++)
+    {
+        auto& angle = rectified_angles.at(i);
+        if (angle > M_PI)
+        {
+            // a line with angle theta and a line with angle theta + PI,
+            // both with the same intersection, are equivalent.
+            angle -= M_PI;
+        }
+        angle_weights.at(i) /= weights_sum;
+    }
+    model.vanishing_point_dir1 = findWeightedMode( 
         rectified_angles, angle_weights, kBinWidth
     );
     // the second vanishing point's direction is orthogonal to the first.
-    model.vanishing_point_dir2 = fmod(model.vanishing_point_dir1 + M_PI_2, M_PI);
+    model.vanishing_point_dir2 = utils::clipAngle(model.vanishing_point_dir1 + M_PI_2);
     models.emplace_back(model);
     return true;
 }
@@ -792,8 +761,8 @@ double RectifyingHomographyTwoSIFTSolver::orientationResidual(
     // feature's rectified orientation and the model's two orthogonal principle
     // orientations.  
     return std::fmin(
-        absoluteAngleDiff(model.vanishing_point_dir1, rectified_orientation),
-        absoluteAngleDiff(model.vanishing_point_dir2, rectified_orientation)
+        utils::linesAnglesDiff(model.vanishing_point_dir1, rectified_orientation),
+        utils::linesAnglesDiff(model.vanishing_point_dir2, rectified_orientation)
     );
 }
 
@@ -802,6 +771,15 @@ double RectifyingHomographyTwoSIFTSolver::residual(
 ) const
 {
     double r{DBL_MAX};
+    if (feature.rows != 1)
+    {
+        std::stringstream err_msg;
+        err_msg << "Invalid feature argument in class method "
+                << "RectifyingHomographyTwoSIFTSolver::residual. "
+                << "Expected single row feature, but received " << feature.rows
+                << " rows.\n";
+        throw std::runtime_error(err_msg.str());
+    }
     if (type == scale_set_idx)
     {
         auto x = feature.at<double>(0, x_pos);
