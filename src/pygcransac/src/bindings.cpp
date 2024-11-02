@@ -3,6 +3,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl_bind.h>
 #include <pybind11/numpy.h>
+#include <pybind11/eigen.h>
 #include "gcransac_python.h"
 #include "model.h"
 
@@ -284,7 +285,10 @@ PYBIND11_PLUGIN(pygcransac) {
 		.def("unrectifiedPoint", [](const RectifyingHomography &self, double x, double y) {
 			self.unrectifyPoint(x, y);
 			return py::make_tuple(x, y);
-		}, "Unrectify point");
+		}, "Unrectify point")
+		.def("getHomography", [](const RectifyingHomography &self) {
+			return self.getHomography();
+		}, "Get homography matrix");
 
 	py::class_<ScaleBasedRectifyingHomography, RectifyingHomography>(m, "ScaleBasedRectifyingHomography")
 		.def(py::init<>())
