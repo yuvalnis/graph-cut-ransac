@@ -218,6 +218,7 @@ py::tuple findRectifyingHomographySIFT(
 			pybind11::cast<pybind11::none>(Py_None),
 			scale_inliers,
 			orientation_inliers,
+			pybind11::cast<pybind11::none>(Py_None),
 			pybind11::cast<pybind11::none>(Py_None)
 		);
     }
