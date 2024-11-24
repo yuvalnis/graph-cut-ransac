@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include "math_utils.hpp"
+#include "model.h"
 
 void testCollinearPointsPositiveCase()
 {
@@ -469,6 +470,45 @@ void testNChoose2()
     }
 }
 
+void testRectifyingHomography()
+{
+    constexpr double kEpsilon = 1e-12;
+    // test that the warping and rectifying methods are consistent
+    gcransac::RectifyingHomography model;
+    model.h7 = 0.0001;
+    model.h8 = 0.0002;
+
+    const double udx{82.4};
+    const double udy{-12.3};
+    const double uds{1.13};
+    // warp x, y and scale
+    auto ds = model.unrectifiedScale(udx, udy, uds);
+    Eigen::Vector3d p(udx, udy, 1.0);
+    model.unrectifyPoint(p);
+    auto dx = p(0) / p(2);
+    auto dy = p(1) / p(2);
+    // rectify x, y and scale
+    auto uds_comp = model.rectifiedScale(dx, dy, ds);
+    p = Eigen::Vector3d(dx, dy, 1.0);
+    model.rectifyPoint(p);
+    auto udx_comp = p(0) / p(2);
+    auto udy_comp = p(1) / p(2);
+    // check if values are similar
+    bool x_diff = std::fabs(udx - udx_comp) > kEpsilon;
+    bool y_diff = std::fabs(udy - udy_comp) > kEpsilon;
+    bool s_diff = std::fabs(uds - uds_comp) > kEpsilon;
+    if (x_diff || y_diff || s_diff)
+    {
+        std::stringstream error_msg;
+        error_msg << "Performing warping and then rectification of a "
+                  << "scale-feature yielded: "
+                  << "(" << udx_comp << ", " << udy_comp << ", " << uds_comp << ")."
+                  << "Expected: "
+                  << "(" << udx << ", " << udy << ", " << uds << ").\n";
+        throw std::runtime_error(error_msg.str());
+    }
+}
+
 void runTest(const std::string& desc, void (*test)())
 {
     static size_t index{0};
@@ -503,4 +543,5 @@ int main()
     runTest("minimal angle difference", testMinAngleDiff);
     runTest("lines angles difference", testLinesAnglesDiff);
     runTest("n choose 2", testNChoose2);
+    runTest("Warping and rectifying", testRectifyingHomography);
 }

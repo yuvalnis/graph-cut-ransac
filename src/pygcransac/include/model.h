@@ -153,7 +153,7 @@ struct RectifyingHomography : public NormalizingTransform
 		y = point(1) / point(2);
 	}
 
-	double rectifiedAngle(const double& x, const double& y, const double& angle) const
+	double rectifiedAngle(double x, double y, double angle) const
 	{
 		const auto ct = std::cos(angle);
    		const auto st = std::sin(angle);
@@ -162,7 +162,7 @@ struct RectifyingHomography : public NormalizingTransform
 		return utils::clipAngle(std::atan2(numer, denom));
 	}
 
-	double unrectifiedAngle(const double& x, const double& y, const double& angle) const
+	double unrectifiedAngle(double x, double y, double angle) const
 	{
 		const auto ct = std::cos(angle);
    		const auto st = std::sin(angle);
@@ -173,16 +173,39 @@ struct RectifyingHomography : public NormalizingTransform
 		return utils::clipAngle(std::atan2(numer, denom));
 	}
 
-	inline double rectifiedScale(const double& x, const double& y, const double& scale) const
+	/// @brief Computes the local scale changed applied by the perspective
+	/// warping homography
+	/// @param udx x-coordinate in the unwarped image (rectified coordinate)
+	/// @param udy y-coordinate in the unwarped image (rectified coordinate)
+	/// @return A scalar representing the local scale change applied to a scale
+	/// feature in the coordinates (udx, udy) in the unwarped image
+	inline double localScalePerspectiveWarp(double udx, double udy) const
 	{
-		return scale * std::pow(h7 * x + h8 * y + 1.0, 3.0);
+		// The determinant of the perspective component of the homography at (x, y)
+		return std::pow(h7 * udx + h8 * udy + 1.0, -3.0);
 	}
 
-	inline double unrectifiedScale(const double& x, const double& y, const double& scale) const
+	/// @brief Computes the local scale changed applied by the inverse of the
+	/// perspective warping homography
+	/// @param udx x-coordinate in the warped image
+	/// @param udy y-coordinate in the warped image
+	/// @return A scalar representing the local scale change applied to a scale
+	/// feature in the coordinates (dx, dy) in the warped image
+	inline double localScaleAffineRectification(double dx, double dy) const
 	{
 		// negating h7 and h8 is equivalent to inverting the warping
 		// homography matrix in this case
-		return scale * std::pow(-h7 * x - h8 * y + 1.0, 3.0);
+		return std::pow(-h7 * dx - h8 * dy + 1.0, -3.0);
+	}
+
+	inline double rectifiedScale(double dx, double dy, double ds) const
+	{
+		return ds * localScaleAffineRectification(dx, dy);
+	}
+
+	inline double unrectifiedScale(double udx, double udy, double uds) const
+	{
+		return uds * localScalePerspectiveWarp(udx, udy);
 	}
 
 	Eigen::Matrix3d getHomography() const
