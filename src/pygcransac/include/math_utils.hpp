@@ -42,6 +42,12 @@
 namespace gcransac::utils
 {
 
+template<typename T>
+constexpr T cube(T x)
+{
+    return x * x * x;
+}
+
 constexpr size_t nChoose2(size_t n)
 {
     if (n == 0)

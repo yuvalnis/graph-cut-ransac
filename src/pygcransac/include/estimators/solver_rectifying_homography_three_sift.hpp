@@ -104,7 +104,7 @@ public:
     ) const;
 
 protected:
-    static constexpr double kScalePower = -1.0 / 3.0;
+    static constexpr double kScalePower = 1.0 / 3.0;
     static constexpr double kEpsilon = 1e-9;
     static constexpr size_t x_pos = 0; // x-coordinate position
     static constexpr size_t y_pos = 1; // y-coordinate position
@@ -200,31 +200,20 @@ bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
         );
         return false;
     }
-    // helper function to fetch correct sample
-    const auto* data_ptr = reinterpret_cast<double*>(data.data);
-    auto get_inlier = [&data_ptr, &inliers, &data](
-        const size_t& feature_idx
-    )
-    {
-        const size_t& idx = inliers.empty() ?
-                            feature_idx :
-                            inliers[feature_idx];
-        return data_ptr + idx * data.cols;
-    };
-
     Eigen::Matrix<double, 3, 4> coeffs;
     for (size_t i = 0; i < inliers.size(); i++)
     {
-        const auto* feature = get_inlier(i);
-        const auto &x = feature[x_pos];
-        const auto &y = feature[y_pos];
-        const auto &s = feature[s_pos];
+        auto inlier_idx = inliers.at(i);
+        double x = data.at<double>(inlier_idx, x_pos);
+        double y = data.at<double>(inlier_idx, y_pos);
+        double s = data.at<double>(inlier_idx, s_pos);
 
         coeffs(i, 0) = x;
         coeffs(i, 1) = y;
-        coeffs(i, 2) = -pow(s, kScalePower);
-        coeffs(i, 3) = -1.0;
+        coeffs(i, 2) = pow(s, kScalePower);
+        coeffs(i, 3) = 1.0;
     }
+    // Eigen::Matrix<double, 3, 1> solution = coeffs.colPivHouseholderQr().solve(rhs);
     Eigen::Matrix<double, 3, 1> solution;
     gcransac::utils::gaussElimination<3>(coeffs, solution);
     if (solution.hasNaN())
@@ -235,11 +224,15 @@ bool RectifyingHomographyThreeSIFTSolver::estimateMinimalModel(
     ScaleBasedRectifyingHomography model;
     model.h7 = solution(0);
     model.h8 = solution(1);
-    model.alpha = solution(2);
-    if (model.alpha < kEpsilon)
+    // The solution includes an estimate pf the inverse of the alpha parameter,
+    // since it uses XY coordinates in the warped image space, and not the
+    // rectified image space, unlike the method in Chum's paper. 
+    double inv_alpha = solution(2);
+    if (inv_alpha < kEpsilon)
     {
         return false;
     }
+    model.alpha = 1.0 / inv_alpha;
     models.emplace_back(model);
     return true;
 }
@@ -282,15 +275,14 @@ bool RectifyingHomographyThreeSIFTSolver::estimateNonMinimalModel(
 
         coeffs(i, 0) = w * x;
         coeffs(i, 1) = w * y;
-        coeffs(i, 2) = -w * pow(s, kScalePower);
-        rhs(i) = -w;
+        coeffs(i, 2) = w * pow(s, kScalePower);
+        rhs(i) = w;
     }
     // solve linear least squares system
     Eigen::Matrix<double, 3, 1> solution = coeffs.colPivHouseholderQr().solve(rhs);
     // verify validity of solution
     if (solution.hasNaN())
     {
-        fprintf(stderr, "Invalid solution for the non-minimal model");
         return false;
     }
     // construct model
@@ -357,7 +349,7 @@ double RectifyingHomographyThreeSIFTSolver::scaleResidual(
         point(0), point(1), scale
     );
     // the model's estimation of the feature's cubed-scale in the rectified image
-    const auto alpha_cube = std::pow(model.alpha, 3.0);
+    const auto alpha_cube = utils::cube(model.alpha);
     // scale-based residual: logarithmic scale difference between the feature's
     // rectified scale and the model's estimated rectified scale for all features.
     return std::fabs(std::log(rectified_scale / alpha_cube));
