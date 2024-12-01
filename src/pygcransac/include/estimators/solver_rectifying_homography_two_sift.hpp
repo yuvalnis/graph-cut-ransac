@@ -94,7 +94,7 @@ public:
     ) const;
 
 protected:
-    static constexpr double kScalePower = -1.0 / 3.0;
+    static constexpr double kScalePower = 1.0 / 3.0;
     static constexpr double kEpsilon = 1e-9;
     static constexpr size_t x_pos = 0; // x-coordinate position
     static constexpr size_t y_pos = 1; // y-coordinate position
@@ -326,8 +326,8 @@ void RectifyingHomographyTwoSIFTSolver::setScaleConstraint(
 {
     coeffs(row_idx, 0) = x;
     coeffs(row_idx, 1) = y;
-    coeffs(row_idx, 2) = -pow(scale, kScalePower);
-    coeffs(row_idx, 3) = -1.0;
+    coeffs(row_idx, 2) = pow(scale, kScalePower);
+    coeffs(row_idx, 3) = 1.0;
 }
 
 void RectifyingHomographyTwoSIFTSolver::setScaleConstraint(
@@ -337,8 +337,8 @@ void RectifyingHomographyTwoSIFTSolver::setScaleConstraint(
 {
     coeffs(row_idx, 0) = weight * x;
     coeffs(row_idx, 1) = weight * y;
-    coeffs(row_idx, 2) = -weight * pow(scale, kScalePower);
-    rhs(row_idx) = -weight;
+    coeffs(row_idx, 2) = weight * pow(scale, kScalePower);
+    rhs(row_idx) = weight;
 }
 
 void RectifyingHomographyTwoSIFTSolver::setOrientationConstraint(
@@ -360,7 +360,7 @@ void RectifyingHomographyTwoSIFTSolver::setOrientationConstraint(
     coeffs(row_idx, 0) = w * vp(0);
     coeffs(row_idx, 1) = w * vp(1);
     coeffs(row_idx, 2) = 0.0;
-    rhs(row_idx) = -w * vp(2);
+    rhs(row_idx) = w * vp(2);
 }
 
 bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
@@ -417,7 +417,7 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     coeffs(2, 0) = vp(0);
     coeffs(2, 1) = vp(1);
     coeffs(2, 2) = 0;
-    coeffs(2, 3) = -vp(2);
+    coeffs(2, 3) = vp(2);
 
     Eigen::Matrix<double, 3, 1> solution;
     gcransac::utils::gaussElimination<3>(coeffs, solution);
@@ -429,16 +429,20 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     SIFTRectifyingHomography model;
     model.h7 = solution(0);
     model.h8 = solution(1);
-    model.alpha = solution(2);
-    if (model.alpha < kEpsilon)
+    // The solution includes an estimate pf the inverse of the alpha parameter,
+    // since it uses XY coordinates in the warped image space, and not the
+    // rectified image space, unlike the method in Chum's paper. 
+    double inv_alpha = solution(2);
+    if (inv_alpha < kEpsilon)
     {
         return false;
     }
+    model.alpha = 1.0 / inv_alpha;
     // Compute the directions of the vanishing points.
     // Vanishing point should be mapped to infinity in rectified image.
     // Model is for warping homography, so we "unrectify" the vanishing point
     // to map it to the rectified image.
-    model.unrectifyPoint(vp);
+    model.rectifyPoint(vp);
     if (std::abs(vp[2]) > kEpsilon)
     {
         return false;
@@ -636,7 +640,6 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
     // verify validity of solution
     if (solution.hasNaN())
     {
-        fprintf(stderr, "Invalid solution for the non-minimal model\n");
         return false;
     }
     // construct model
@@ -746,7 +749,7 @@ double RectifyingHomographyTwoSIFTSolver::scaleResidual(
         point(0), point(1), scale
     );
     // the model's estimation of the feature's cubed-scale in the rectified image
-    const auto alpha_cube = std::pow(model.alpha, 3.0);
+    const auto alpha_cube = utils::cube(model.alpha);
     // scale-based residual: logarithmic scale difference between the feature's
     // rectified scale and the model's estimated rectified scale for all features.
     return std::fabs(std::log(rectified_scale / alpha_cube));
