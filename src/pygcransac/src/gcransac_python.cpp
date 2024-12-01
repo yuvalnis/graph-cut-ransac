@@ -128,7 +128,7 @@ int findRectifyingHomographyScaleOnly_(
 				double y = data[0]->at<double>(i, 1);
 				double s = data[0]->at<double>(i, 2);
 				model.normalizeFeature(x, y, s);
-				model.rectifiedScale(x, y, s);
+				s = model.rectifiedScale(x, y, s);
 				model.rectifyPoint(x, y);
 				model.denormalizeFeature(x, y, s);
 				std::cout << "#" << i << ":\n"
@@ -295,7 +295,7 @@ int findRectifyingHomographySIFT_(
 				double y = data[0]->at<double>(i, 1);
 				double s = data[0]->at<double>(i, 2);
 				model.normalizeFeature(x, y, s);
-				model.rectifiedScale(x, y, s);
+				s = model.rectifiedScale(x, y, s);
 				model.rectifyPoint(x, y);
 				model.denormalizeFeature(x, y, s);
 				std::cout << "#" << i << ":\n"
@@ -311,7 +311,7 @@ int findRectifyingHomographySIFT_(
 				double y = data[1]->at<double>(i, 1);
 				double t = data[1]->at<double>(i, 2);
 				model.normalize(x, y);
-				model.rectifiedAngle(x, y, t);
+				t = model.rectifiedAngle(x, y, t);
 				model.rectifyPoint(x, y);
 				model.denormalize(x, y);
 				std::cout << "#" << i << ":\n"
