@@ -43,6 +43,12 @@ namespace gcransac::utils
 {
 
 template<typename T>
+constexpr T sqr(T x)
+{
+    return x * x;
+}
+
+template<typename T>
 constexpr T cube(T x)
 {
     return x * x * x;
@@ -134,35 +140,18 @@ inline bool areCollinear(
 	double tolerance
 )
 {
-	// Compute the squared distances between each pair of points
-    double dx12 = x1 - x2;
-    double dy12 = y1 - y2;
-    double dx13 = x1 - x3;
-    double dy13 = y1 - y3;
-    double dx23 = x2 - x3;
-    double dy23 = y2 - y3;
-
-    double d12_sq = dx12 * dx12 + dy12 * dy12;
-    double d13_sq = dx13 * dx13 + dy13 * dy13;
-    double d23_sq = dx23 * dx23 + dy23 * dy23;
-
-    // Sum of the squares of the side lengths
-    double sum_of_squares = d12_sq + d13_sq + d23_sq;
-
-    // Compute the area of the triangle using the shoelace formula
-    double area = 0.5 * std::abs(dx12 * dy13 - dy12 * dx13);
-
-    // If all points are very close, assume collinearity
-    if (sum_of_squares < 1e-6)
-    {
-        return true;
-    }
-
-    // Compute the measure, which approximates sin(smallest angle)
-    double measure = (4.0 * area) / sum_of_squares;
-
-    // Check if the measure is within the tolerance
-    return measure < tolerance;
+    Eigen::Vector3d p1{x1, y1, 1.0};
+    Eigen::Vector3d p2{x2, y2, 1.0};
+    Eigen::Vector3d p3{x3, y3, 1.0};
+    // compute line crossing p1 and p2
+    auto l = p1.cross(p2);
+    // normalize it so that dot product between it and homogeneous points is
+    // equal to Euclidean distance.
+    l /= std::sqrt(sqr(l(0)) + sqr(l(1)));
+    // compute distance between l and p3
+    auto dist = l.dot(p3);
+    // test if distance is below tolerance threshold
+    return dist < tolerance;
 }
 
 inline bool areCollinear(

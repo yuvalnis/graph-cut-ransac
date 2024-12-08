@@ -131,7 +131,7 @@ bool RectifyingHomographyThreeSIFTSolver::areAllPointsCollinear(
     const std::vector<size_t>& inliers
 )
 {
-    constexpr double kMaxSmallestAngle{5.0}; // Maximum size of smallest angle in triangle (in degrees)
+    constexpr double kCollinearityThresh{1.0};
     // Check that all points are collinear
     const auto n = inliers.size();
     if (n < 3)
@@ -139,8 +139,6 @@ bool RectifyingHomographyThreeSIFTSolver::areAllPointsCollinear(
         // Less than 3 points are always collinear by definition
         return true;
     }
-    // compute collinearity tolerance
-    const double tolerance = std::abs(std::sin(kMaxSmallestAngle * M_PI / 180.0));
     // check every triplet of points is collinear
     for (size_t i = 0; i < n - 2; i++)
     {
@@ -153,7 +151,7 @@ bool RectifyingHomographyThreeSIFTSolver::areAllPointsCollinear(
         double y2 = data.at<double>(idx2, y_pos);
         double x3 = data.at<double>(idx3, x_pos);
         double y3 = data.at<double>(idx3, y_pos);
-        if (!utils::areCollinear(x1, y1, x2, y2, x3, y3, tolerance))
+        if (!utils::areCollinear(x1, y1, x2, y2, x3, y3, kCollinearityThresh))
         {
             return false;
         }

@@ -144,7 +144,7 @@ bool RectifyingHomographyTwoSIFTSolver::isValidSample(
     const InlierContainerType& inliers
 ) const
 {
-    constexpr double kMaxSmallestAngle{1.0}; // maximum size of smallest angle in triangle (in degrees)
+    constexpr double kCollinearityThresh{1.0};
     const auto& scale_features = data[scale_set_idx];
     const auto& scale_inliers = inliers[scale_set_idx];
     const auto& orient_features = data[orient_set_idx];
@@ -198,8 +198,7 @@ bool RectifyingHomographyTwoSIFTSolver::isValidSample(
     y = scale_features->at<double>(idx, y_pos);
     utils::Point2D p2{x, y};
     // compute collinearity tolerance
-    const double tolerance = std::abs(std::sin(utils::deg2rad(kMaxSmallestAngle)));
-    if (utils::areCollinear(p1, p2, vp2d, tolerance))
+    if (utils::areCollinear(p1, p2, vp2d, kCollinearityThresh))
     {
         return false;
     }
