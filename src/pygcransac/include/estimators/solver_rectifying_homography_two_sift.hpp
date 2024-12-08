@@ -447,13 +447,7 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     {
         return false;
     }
-    model.vanishing_point_dir1 = utils::clipAngle(std::atan2(vp[1], vp[0]));
-    // the second vanishing point's direction is orthogonal to the first.
-    // TODO need to determine if second vanishing point's direction is plus or
-    // minus 90 degrees. This is only for the final vanishing point display,
-    // and otherwise shouldn't affect performance.
-    model.vanishing_point_dir2 = utils::clipAngle(model.vanishing_point_dir1 + M_PI_2);
-
+    model.vanishing_point_dir = utils::clipAngle(std::atan2(vp[1], vp[0]));
     models.emplace_back(model);
     return true;
 } 
@@ -686,11 +680,9 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
         }
         angle_weights.at(i) /= weights_sum;
     }
-    model.vanishing_point_dir1 = findWeightedMode( 
+    model.vanishing_point_dir = findWeightedMode( 
         rectified_angles, angle_weights, kBinWidth
     );
-    // the second vanishing point's direction is orthogonal to the first.
-    model.vanishing_point_dir2 = utils::clipAngle(model.vanishing_point_dir1 + M_PI_2);
     models.emplace_back(model);
     return true;
 }
@@ -767,12 +759,8 @@ double RectifyingHomographyTwoSIFTSolver::orientationResidual(
         point(0), point(1), t
     );
     // orientation-based residual: the minimal angular distance between the
-    // feature's rectified orientation and the model's two orthogonal principle
-    // orientations.  
-    return std::fmin(
-        utils::linesAnglesDiff(model.vanishing_point_dir1, rectified_orientation),
-        utils::linesAnglesDiff(model.vanishing_point_dir2, rectified_orientation)
-    );
+    // feature's rectified orientation and the model's principle orientation.  
+    return utils::linesAnglesDiff(model.vanishing_point_dir, rectified_orientation);
 }
 
 double RectifyingHomographyTwoSIFTSolver::residual(

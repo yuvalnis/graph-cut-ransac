@@ -29,7 +29,6 @@ int findRectifyingHomographySIFT_(
 	std::vector<bool>& scale_inliers, // output scale inlier boolean mask
 	std::vector<bool>& orientation_inliers,	// output orientation inlier boolean mask
 	std::vector<double>& homography,	// output homography
-	std::vector<double>& vanishing_points, // output vanishing points corresponsing to the estimated homography
 	gcransac::SIFTRectifyingHomography& model,
 	unsigned int verbose_level = 0
 );

@@ -174,7 +174,6 @@ py::tuple findRectifyingHomographySIFT(
 	// cpp_weights.assign(weights_ptr, weights_ptr + weights_buff.size);
 
 	std::vector<double> cpp_homography(9);
-	std::vector<double> cpp_vanishing_points(6);
     std::vector<bool> cpp_scale_inliers(num_scale_features);
 	std::vector<bool> cpp_orientation_inliers(num_orientation_features);
 	gcransac::SIFTRectifyingHomography model;
@@ -192,7 +191,6 @@ py::tuple findRectifyingHomographySIFT(
 		cpp_scale_inliers,
 		cpp_orientation_inliers,
 		cpp_homography,
-		cpp_vanishing_points,
 		model
 	);
 	// construct python array for scale inliers from C++ vector
@@ -218,7 +216,6 @@ py::tuple findRectifyingHomographySIFT(
 			pybind11::cast<pybind11::none>(Py_None),
 			scale_inliers,
 			orientation_inliers,
-			pybind11::cast<pybind11::none>(Py_None),
 			pybind11::cast<pybind11::none>(Py_None)
 		);
     }
@@ -230,16 +227,8 @@ py::tuple findRectifyingHomographySIFT(
 	{
 		homography_ptr[i] = cpp_homography[i];
 	}
-	// construct python array for vanishing points for C++ vector
-	py::array_t<double> vanishing_points = py::array_t<double>({3, 2});
-	py::buffer_info vps_buff = vanishing_points.request();
-	auto *vps_ptr = static_cast<double*>(vps_buff.ptr);
-	for (size_t i = 0; i < 6; i++)
-	{
-		vps_ptr[i] = cpp_vanishing_points[i];
-	}
 
-    return py::make_tuple(homography, scale_inliers, orientation_inliers, vanishing_points, model);
+    return py::make_tuple(homography, scale_inliers, orientation_inliers, model);
 }
 
 using namespace gcransac;
@@ -297,8 +286,7 @@ PYBIND11_PLUGIN(pygcransac) {
 
 	py::class_<OrientationBasedRectifyingHomography, RectifyingHomography>(m, "OrientationBasedRectifyingHomography")
 		.def(py::init<>())
-		.def_readwrite("vanishing_point_dir1", &OrientationBasedRectifyingHomography::vanishing_point_dir1)
-		.def_readwrite("vanishing_point_dir2", &OrientationBasedRectifyingHomography::vanishing_point_dir2);
+		.def_readwrite("vanishing_point_direction", &OrientationBasedRectifyingHomography::vanishing_point_dir);
 
 	py::class_<SIFTRectifyingHomography, ScaleBasedRectifyingHomography, OrientationBasedRectifyingHomography>(m, "SIFTRectifyingHomography")
 		.def(py::init<>());

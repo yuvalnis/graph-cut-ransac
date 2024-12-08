@@ -153,7 +153,6 @@ int findRectifyingHomographySIFT_(
 	std::vector<bool>& scale_inliers, // output scale inlier boolean mask
 	std::vector<bool>& orientation_inliers,	// output orientation inlier boolean mask
 	std::vector<double>& homography, // output estimated homography
-	std::vector<double>& vanishing_points, // output vanishing points corresponsing to the estimated homography
 	SIFTRectifyingHomography& model,
 	unsigned int verbose_level
 )
@@ -227,26 +226,6 @@ int findRectifyingHomographySIFT_(
 			homography[i * 3 + j] = H(i, j);
 		}	
 	}
-	// Compute the two orthogonal vanishing points in the rectified image.
-	const auto c1 = std::cos(model.vanishing_point_dir1);
-	const auto s1 = std::sin(model.vanishing_point_dir1);
-	const auto c2 = std::cos(model.vanishing_point_dir2);
-	const auto s2 = std::sin(model.vanishing_point_dir2);
-	Eigen::Vector3d vp1(c1, s1, 0.0);
-	Eigen::Vector3d vp2(c2, s2, 0.0);
-	if (std::fabs(vp1.dot(vp2)) > 1e-9)
-	{
-		fprintf(stderr, "ERROR: rectified vanishing points should be orthogonal!\n");
-	}
-	// Warp vanishing points as the output is the vanishing points in the warped image.
-	vp1 = H * vp1;
-	vp2 = H * vp2;
-	vanishing_points.resize(6);
-	for (size_t i = 0; i < 3; i++)
-	{
-		vanishing_points[2 * i] = vp1(i);
-		vanishing_points[2 * i + 1] = vp2(i);
-	}
 	// create a boolean mask of the scale inliers
     scale_inliers.resize(num_scale_features, false);
 	const auto num_scale_inliers = statistics.inliers[0].size();
@@ -262,25 +241,13 @@ int findRectifyingHomographySIFT_(
 
 	if (verbose_level > 0)
 	{
-		if (std::abs(vp1[2]) > 1e-6)
-		{
-			vp1 /= vp1[2];
-		}
-		if (std::abs(vp2[2]) > 1e-6)
-		{
-			vp2 /= vp2[2];
-		}
 		std::cout << "\nFinal model:\n"
 				  << "\nh7: " << model.h7 << ", h8: " << model.h8 << ", alpha: " << model.alpha << "\n"
 				  << "\nx0: " << model.x0 << ", y0: " << model.y0 << ", s: " << model.s << "\n"
 				  << "\nHomography:\n"
 				  << H << "\n\n"
-				  << "Rectified image vanishing point #1 direction: "
-			  	  << (model.vanishing_point_dir1 * 180.0 * M_1_PI) << std::endl
-				  << "Rectified image vanishing point #2 direction: "
-			      << (model.vanishing_point_dir2 * 180.0 * M_1_PI) << std::endl
-				  << "first vanishing point (normalized): " << vp1.transpose() << "\n"
-				  << "second vanishing point (normalized): " << vp2.transpose() << "\n"
+				  << "Rectified image vanishing point direction: "
+			  	  << (model.vanishing_point_dir * 180.0 * M_1_PI) << std::endl
 				  << "Number of scale-inliers: " << num_scale_inliers << "\n"
 				  << "Number of orientation-inliers: " << num_orientation_inliers
 				  << "\n\n";
