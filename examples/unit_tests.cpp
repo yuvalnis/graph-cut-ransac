@@ -481,14 +481,17 @@ void testRectifyingHomography()
     const double udx{82.4};
     const double udy{-12.3};
     const double uds{1.13};
+    const double udt{0.56};
     // warp x, y and scale
     auto ds = model.unrectifiedScale(udx, udy, uds);
+    auto dt = model.unrectifiedAngle(udx, udy, udt);
     Eigen::Vector3d p(udx, udy, 1.0);
     model.unrectifyPoint(p);
     auto dx = p(0) / p(2);
     auto dy = p(1) / p(2);
     // rectify x, y and scale
     auto uds_comp = model.rectifiedScale(dx, dy, ds);
+    auto udt_comp = model.rectifiedAngle(dx, dy, dt);
     p = Eigen::Vector3d(dx, dy, 1.0);
     model.rectifyPoint(p);
     auto udx_comp = p(0) / p(2);
@@ -497,14 +500,14 @@ void testRectifyingHomography()
     bool x_diff = std::fabs(udx - udx_comp) > kEpsilon;
     bool y_diff = std::fabs(udy - udy_comp) > kEpsilon;
     bool s_diff = std::fabs(uds - uds_comp) > kEpsilon;
-    if (x_diff || y_diff || s_diff)
+    bool t_diff = std::fabs(udt - udt_comp) > kEpsilon;
+    if (x_diff || y_diff || s_diff || t_diff)
     {
         std::stringstream error_msg;
-        error_msg << "Performing warping and then rectification of a "
-                  << "scale-feature yielded: "
-                  << "(" << udx_comp << ", " << udy_comp << ", " << uds_comp << ")."
+        error_msg << "Performing warping and then rectification yielded: "
+                  << "(" << udx_comp << ", " << udy_comp << ", " << uds_comp << ", " << udt_comp << "). "
                   << "Expected: "
-                  << "(" << udx << ", " << udy << ", " << uds << ").\n";
+                  << "(" << udx << ", " << udy << ", " << uds << ", " << udt << ").\n";
         throw std::runtime_error(error_msg.str());
     }
 }
