@@ -44,8 +44,8 @@ public:
 
     inline bool isValidModel(
 		const Model& model,
-		const DataType& data,
-		const InlierContainerType& inliers,
+		[[maybe_unused]] const DataType& data,
+		[[maybe_unused]] const InlierContainerType& inliers,
 		[[maybe_unused]] const InlierContainerType& minimal_sample,
 		[[maybe_unused]] const ResidualType& threshold,
 		[[maybe_unused]] bool& model_updated
@@ -57,8 +57,7 @@ public:
         {
             return false;
         }
-        return isValidModelInternal(model, *(data[scale_set_idx].get()),
-                                    inliers[scale_set_idx]);
+        return true;
     }
 
     bool estimateModel(
@@ -211,109 +210,6 @@ bool RectifyingHomographyTwoSIFTSolver::isValidSample(
     if (utils::pointInConvexPolygon(vp2d, convex_hull))
     {
         return false;
-    }
-    return true;
-}
-
-// bool RectifyingHomographyTwoSIFTSolver::isValidSample(
-//     const DataType& data,
-//     const InlierContainerType& inliers
-// ) const
-// {
-//     const auto& orient_features = data[orient_set_idx];
-//     const auto& orient_inliers = inliers[orient_set_idx];
-//     if (orient_inliers.size() < 2)
-//     {
-//         // Need at least two orientation inliers to produce a vanishing point
-//         return true;
-//     }
-//     // Collect points for convex-hull computation, while computing the minimal
-//     // and maximal values in each axis (the axis-aligned bounding-box of the
-//     // convex-hull). Both scale- and orientation- features are detected and so
-//     // participate in this part.
-//     double x_min{DBL_MAX};
-//     double x_max{DBL_MIN};
-//     double y_min{DBL_MAX};
-//     double y_max{DBL_MIN};
-//     std::vector<utils::Point2D> points;
-//     points.reserve(inliers[0].size() + inliers[1].size());
-//     for (size_t i = 0; i < ResidualDimension::value; i++)
-//     {
-//         for (const auto& idx : inliers[i])
-//         {
-//             auto x = data[i]->at<double>(idx, x_pos);
-//             auto y = data[i]->at<double>(idx, y_pos);
-//             x_min = std::min(x, x_min);
-//             x_max = std::max(x, x_max);
-//             y_min = std::min(y, y_min);
-//             y_max = std::max(y, y_max);
-//             points.emplace_back(x, y);
-//         }
-//     }
-//     // Compute convex-hull
-//     const auto convex_hull = utils::computeConvexHull(points);
-//     // For each vanishing point, first check if it is degenerate (zero-norm),
-//     // and then check if it is outside the convex-hull.
-//     for (size_t i = 0; i < orient_inliers.size() - 1; i++)
-//     {
-//         auto idx_i = orient_inliers.at(i);
-//         auto xi = orient_features->at<double>(idx_i, x_pos);
-//         auto yi = orient_features->at<double>(idx_i, y_pos);
-//         auto ti = orient_features->at<double>(idx_i, t_pos);
-//         auto li = lineFromPointAndAngle(xi, yi, ti);
-//         for (size_t j = i + 1; j < orient_inliers.size(); j++)
-//         {
-//             auto idx_j = orient_inliers.at(j);
-//             auto xj = orient_features->at<double>(idx_j, x_pos);
-//             auto yj = orient_features->at<double>(idx_j, y_pos);
-//             auto tj = orient_features->at<double>(idx_j, t_pos);
-//             auto lj = lineFromPointAndAngle(xj, yj, tj);
-//             auto vp = li.cross(lj); // intersection of lines is vanishing point
-//             if ((vp.array().cwiseAbs() < 1e-6).all())
-//             {
-//                 return false;
-//             }
-//             if (std::abs(vp[2]) < 1e-6)
-//             {
-//                 // If vanishing point is at infinity, it is outside the
-//                 // convex-hull 
-//                 continue;
-//             }
-//             vp /= vp[2];
-//             // Perform faster check if vanishing point is outside the bounding
-//             // box of the convex-hull
-//             bool outside_bbx = vp[0] < x_min || x_max < vp[0];
-//             bool outside_bby = vp[1] < y_min || y_max < vp[1];
-//             if (outside_bbx && outside_bby)
-//             {
-//                 continue;
-//             }
-//             if (utils::pointInConvexPolygon({vp[0], vp[1]}, convex_hull))
-//             {
-//                 return false;
-//             }
-//         }
-//     }
-//     return true;
-// }
-
-bool RectifyingHomographyTwoSIFTSolver::isValidModelInternal(
-    const Model& model,
-    const cv::Mat& scale_features,
-    const std::vector<size_t>& scale_inliers
-) const
-{
-    // the model should not map detected (non-zero) scales to non-positive
-    // scales in the rectified image
-    for (const auto& idx : scale_inliers)
-    {
-        auto x = scale_features.at<double>(idx, x_pos);
-        auto y = scale_features.at<double>(idx, y_pos);
-        auto s = scale_features.at<double>(idx, s_pos);
-        if (model.rectifiedScale(x, y, s) < kEpsilon)
-        {
-            return false;
-        }
     }
     return true;
 }
@@ -735,6 +631,12 @@ double RectifyingHomographyTwoSIFTSolver::scaleResidual(
     const auto rectified_scale = model.rectifiedScale(
         point(0), point(1), scale
     );
+    // We assume an inlier scale feature can't possibly be rectified into a
+    // non-positive scale in the rectified image of a plane.
+    if (rectified_scale < kEpsilon)
+    {
+        return DBL_MAX;
+    }
     // the model's estimation of the feature's cubed-scale in the rectified image
     const auto alpha_cube = utils::cube(model.alpha);
     // scale-based residual: logarithmic scale difference between the feature's

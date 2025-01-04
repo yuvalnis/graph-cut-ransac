@@ -42,24 +42,6 @@ public:
         return !areAllPointsCollinear(*(data[0].get()), inliers[0]);
 	}
 
-    bool isValidModelInternal(
-		const Model& model,
-        const cv::Mat& scale_features,
-        const std::vector<size_t>& scale_inliers
-	) const;
-
-    inline bool isValidModel(
-		const Model& model,
-		const DataType& data,
-		const InlierContainerType& inliers,
-		[[maybe_unused]] const InlierContainerType& minimal_sample,
-		[[maybe_unused]] const ResidualType& threshold,
-		[[maybe_unused]] bool& model_updated
-	) const override
-    {
-        return isValidModelInternal(model, *(data[0].get()), inliers[0]);
-    }
-
     // Estimate the model parameters from the given point sample
     // using weighted fitting if possible.
     bool estimateModel(
@@ -157,27 +139,6 @@ bool RectifyingHomographyThreeSIFTSolverOriginal::areAllPointsCollinear(
         }
     }
 
-    return true;
-}
-
-bool RectifyingHomographyThreeSIFTSolverOriginal::isValidModelInternal(
-    const Model& model,
-    const cv::Mat& scale_features,
-    const std::vector<size_t>& scale_inliers
-) const
-{
-    // the model should not map detected (non-zero) scales to non-positive
-    // scales in the rectified image
-    for (const auto& idx : scale_inliers)
-    {
-        auto x = scale_features.at<double>(idx, x_pos);
-        auto y = scale_features.at<double>(idx, y_pos);
-        auto s = scale_features.at<double>(idx, s_pos);
-        if (model.rectifiedScale(x, y, s) < kEpsilon)
-        {
-            return false;
-        }
-    }
     return true;
 }
 
@@ -342,6 +303,12 @@ double RectifyingHomographyThreeSIFTSolverOriginal::scaleResidual(
     const auto rectified_scale = model.rectifiedScale(
         point(0), point(1), scale
     );
+    // We assume an inlier scale feature can't possibly be rectified into a
+    // non-positive scale in the rectified image of a plane.
+    if (rectified_scale < kEpsilon)
+    {
+        return DBL_MAX;
+    }
     // the model's estimation of the feature's cubed-scale in the rectified image
     const auto alpha_cube = utils::cube(model.alpha);
     // scale-based residual: logarithmic scale difference between the feature's
