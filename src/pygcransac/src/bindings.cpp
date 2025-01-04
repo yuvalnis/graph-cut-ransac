@@ -97,10 +97,90 @@ py::tuple findRectifyingHomographyScaleOnly(
     return py::make_tuple(homography, inliers, model);
 }
 
+py::tuple findRectifyingHomographyScaleOnlyOriginal(
+	py::array_t<double> features,
+	// py::array_t<double> weights,
+	double scale_residual_thresh,
+	double spatial_coherence_weight,
+	size_t min_iteration_number,
+	size_t max_iteration_number,
+	size_t max_local_optimization_number
+)
+{
+	constexpr size_t kFeatureSize = 3;
+	constexpr size_t kNumMinFeatures = 3;
+
+	py::buffer_info features_buff = features.request();
+	// py::buffer_info weights_buff = weights.request();
+
+	if (features_buff.ndim != 2)
+	{
+		throw std::invalid_argument("Number of dimensions must be 2.");
+	}
+
+	const size_t num_features = features_buff.shape[0];
+	const size_t feature_size = features_buff.shape[1];
+	// validate dimenstions of input
+	if (num_features < kNumMinFeatures || feature_size != kFeatureSize)
+	{
+		std::stringstream error_msg;
+		error_msg << "Features should be an array with " << kFeatureSize
+				  << " columns and at least " << kNumMinFeatures << " rows."
+				  << " It has " << feature_size << " columns and "
+				  << num_features << " rows.";
+		throw std::invalid_argument(error_msg.str());
+	}
+	// construct C++ vector for features and weights from python array
+	std::vector<double> cpp_features;
+	py2cpp_vector(features, cpp_features);
+	// const auto* weights_ptr = static_cast<double*>(weights_buff.ptr);
+	// std::vector<double> cpp_weights;
+	// cpp_weights.assign(weights_ptr, weights_ptr + weights_buff.size);
+
+	std::vector<double> cpp_homography(9);
+    std::vector<bool> cpp_inliers(num_features);
+	gcransac::ScaleBasedRectifyingHomography model;
+
+	const auto num_inliers = findRectifyingHomographyScaleOnlyOriginal_(
+		cpp_features,
+		// cpp_weights,
+		scale_residual_thresh,
+		spatial_coherence_weight,
+		min_iteration_number,
+		max_iteration_number,
+		max_local_optimization_number,
+		cpp_inliers,
+		cpp_homography,
+		model
+	);
+	// construct python array for inliers from C++ vector
+	py::array_t<bool> inliers = py::array_t<bool>(num_features);
+    py::buffer_info inliers_buff = inliers.request();
+    auto *inliers_ptr = static_cast<bool*>(inliers_buff.ptr);
+    for (size_t i = 0; i < num_features; i++)
+	{
+    	inliers_ptr[i] = cpp_inliers[i];
+	}
+
+    if (num_inliers == 0)
+	{
+        return py::make_tuple(pybind11::cast<pybind11::none>(Py_None), inliers);
+    }
+	// construct python array for homography for C++ vector
+    py::array_t<double> homography = py::array_t<double>({3, 3});
+    py::buffer_info homography_buff = homography.request();
+    auto *homography_ptr = static_cast<double*>(homography_buff.ptr);
+    for (size_t i = 0; i < 9; i++)
+	{
+		homography_ptr[i] = cpp_homography[i];
+	}
+
+    return py::make_tuple(homography, inliers, model);
+}
+
 py::tuple findRectifyingHomographySIFT(
 	py::array_t<double> scale_features,
 	py::array_t<double> orientation_features,
-	// py::array_t<double> weights,
 	double scale_residual_thresh,
 	double orientation_residual_thresh,
 	double spatial_coherence_weight,
@@ -181,7 +261,6 @@ py::tuple findRectifyingHomographySIFT(
 	const auto num_inliers = findRectifyingHomographySIFT_(
 		cpp_scale_features,
 		cpp_orientation_features,
-		// cpp_weights,
 		scale_residual_thresh,
 		orientation_residual_thresh,
 		spatial_coherence_weight,
@@ -292,6 +371,16 @@ PYBIND11_PLUGIN(pygcransac) {
 		.def(py::init<>());
 
 	m.def("findRectifyingHomographyScaleOnly", &findRectifyingHomographyScaleOnly, R"doc(some doc)doc",
+		py::arg("features"),
+		// py::arg("weights"),
+		py::arg("scale_residual_thresh"),
+		py::arg("spatial_coherence_weight") = 0.0,
+		py::arg("min_iteration_number") = 10000,
+		py::arg("max_iteration_number") = 10000,
+		py::arg("max_local_optimization_number") = 50
+	);
+
+	m.def("findRectifyingHomographyScaleOnlyOriginal", &findRectifyingHomographyScaleOnlyOriginal, R"doc(some doc)doc",
 		py::arg("features"),
 		// py::arg("weights"),
 		py::arg("scale_residual_thresh"),

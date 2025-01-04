@@ -157,8 +157,10 @@ struct RectifyingHomography : public NormalizingTransform
 	{
 		const auto ct = std::cos(angle);
    		const auto st = std::sin(angle);
-		const auto numer = (x * st - y * ct) * (-h7) + st;
-		const auto denom = (-x * st + y * ct) * (-h8) + ct;
+		// negating h7 and h8 is equivalent to inverting the warping
+		// homography matrix in this case
+		const auto numer = (-x * st + y * ct) * h7 + st;
+		const auto denom = (x * st - y * ct) * h8 + ct;
 		return utils::clipAngle(std::atan2(numer, denom));
 	}
 
@@ -166,8 +168,6 @@ struct RectifyingHomography : public NormalizingTransform
 	{
 		const auto ct = std::cos(angle);
    		const auto st = std::sin(angle);
-		// negating h7 and h8 is equivalent to inverting the warping
-		// homography matrix in this case
 		const auto numer = (x * st - y * ct) * h7 + st;
 		const auto denom = (-x * st + y * ct) * h8 + ct;
 		return utils::clipAngle(std::atan2(numer, denom));

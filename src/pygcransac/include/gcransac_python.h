@@ -17,6 +17,19 @@ int findRectifyingHomographyScaleOnly_(
 	unsigned int verbose_level = 0
 );
 
+int findRectifyingHomographyScaleOnlyOriginal_(
+	const std::vector<double>& features,
+	double scale_residual_thresh,
+	double spatial_coherence_weight,
+	size_t min_iteration_number,
+	size_t max_iteration_number,
+	size_t max_local_optimization_number,
+	std::vector<bool>& inliers,	// output inlier boolean mask
+	std::vector<double>& homography,	// output homography
+	gcransac::ScaleBasedRectifyingHomography& model,
+	unsigned int verbose_level = 0
+);
+
 int findRectifyingHomographySIFT_(
 	const std::vector<double>& scale_features,
 	const std::vector<double>& orientation_features,

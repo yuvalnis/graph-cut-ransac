@@ -68,6 +68,7 @@
 // #include "estimators/solver_radial_homography_5pc.h"
 // #include "estimators/solver_radial_homography_6pc.h"
 #include "estimators/solver_rectifying_homography_three_sift.hpp"
+#include "estimators/solver_rectifying_homography_three_sift_original.hpp"
 #include "estimators/solver_rectifying_homography_two_sift.hpp"
 
 namespace gcransac
@@ -108,6 +109,11 @@ namespace gcransac
 		typedef estimator::RectifyingHomographyEstimator<
 			estimator::solver::RectifyingHomographyThreeSIFTSolver
 		> ScaleBasedRectifyingHomographyEstimator;
+
+		// The default estimator for rectifying homography fitting with 3 scale-only SIFT features
+		typedef estimator::RectifyingHomographyEstimator<
+			estimator::solver::RectifyingHomographyThreeSIFTSolverOriginal
+		> OriginalScaleBasedRectifyingHomographyEstimator;
 
 		// The default estimator for rectifying homography fitting with 2 full (scale and orientation) SIFT features
 		typedef estimator::RectifyingHomographyEstimator<
