@@ -428,15 +428,11 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     SIFTRectifyingHomography model;
     model.h7 = solution(0);
     model.h8 = solution(1);
-    // The solution includes an estimate pf the inverse of the alpha parameter,
-    // since it uses XY coordinates in the warped image space, and not the
-    // rectified image space, unlike the method in Chum's paper. 
-    double inv_alpha = solution(2);
-    if (inv_alpha < kEpsilon)
+    model.alpha = solution(2);
+    if (model.alpha < kEpsilon)
     {
         return false;
     }
-    model.alpha = 1.0 / inv_alpha;
     // Compute the directions of the vanishing points.
     // Vanishing point should be mapped to infinity in rectified image.
     // Model is for warping homography, so we "unrectify" the vanishing point
@@ -743,7 +739,7 @@ double RectifyingHomographyTwoSIFTSolver::scaleResidual(
     const auto alpha_cube = utils::cube(model.alpha);
     // scale-based residual: logarithmic scale difference between the feature's
     // rectified scale and the model's estimated rectified scale for all features.
-    return std::fabs(std::log(rectified_scale / alpha_cube));
+    return std::fabs(std::log(alpha_cube * rectified_scale));
 }
 
 double RectifyingHomographyTwoSIFTSolver::orientationResidual(
