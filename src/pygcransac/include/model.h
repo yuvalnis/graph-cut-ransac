@@ -237,7 +237,7 @@ struct OrientationBasedRectifyingHomography : virtual public RectifyingHomograph
 {
 	// The direction (in radians) of the vanishing point used to estimate the 
 	// model in the rectified image.
-	double vanishing_point_dir{0.0};
+	double phi{0.0};
 };
 
 struct SIFTRectifyingHomography : public ScaleBasedRectifyingHomography, OrientationBasedRectifyingHomography

@@ -338,7 +338,7 @@ bool RectifyingHomographyTwoSIFTSolver::estimateMinimalModel(
     {
         return false;
     }
-    model.vanishing_point_dir = utils::clipAngle(std::atan2(vp[1], vp[0]));
+    model.phi = utils::clipAngle(std::atan2(vp[1], vp[0]));
     models.emplace_back(model);
     return true;
 } 
@@ -571,7 +571,7 @@ bool RectifyingHomographyTwoSIFTSolver::estimateNonMinimalModel(
         }
         angle_weights.at(i) /= weights_sum;
     }
-    model.vanishing_point_dir = findWeightedMode( 
+    model.phi = findWeightedMode( 
         rectified_angles, angle_weights, kBinWidth
     );
     models.emplace_back(model);
@@ -656,8 +656,12 @@ double RectifyingHomographyTwoSIFTSolver::orientationResidual(
         point(0), point(1), t
     );
     // orientation-based residual: the minimal angular distance between the
-    // feature's rectified orientation and the model's principle orientation.  
-    return utils::linesAnglesDiff(model.vanishing_point_dir, rectified_orientation);
+    // feature's rectified orientation and the model's principle orthogonal
+    // orientations.  
+    return std::fmin(
+        utils::linesAnglesDiff(model.phi, rectified_orientation),
+        utils::linesAnglesDiff(utils::clipAngle(model.phi + M_PI_2), rectified_orientation)
+    );
 }
 
 double RectifyingHomographyTwoSIFTSolver::residual(

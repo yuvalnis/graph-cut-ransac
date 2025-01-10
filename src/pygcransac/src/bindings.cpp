@@ -365,7 +365,7 @@ PYBIND11_PLUGIN(pygcransac) {
 
 	py::class_<OrientationBasedRectifyingHomography, RectifyingHomography>(m, "OrientationBasedRectifyingHomography")
 		.def(py::init<>())
-		.def_readwrite("vanishing_point_direction", &OrientationBasedRectifyingHomography::vanishing_point_dir);
+		.def_readwrite("phi", &OrientationBasedRectifyingHomography::phi);
 
 	py::class_<SIFTRectifyingHomography, ScaleBasedRectifyingHomography, OrientationBasedRectifyingHomography>(m, "SIFTRectifyingHomography")
 		.def(py::init<>());

@@ -359,7 +359,7 @@ int findRectifyingHomographySIFT_(
 				  << "\nHomography:\n"
 				  << H << "\n\n"
 				  << "Rectified image vanishing point direction: "
-			  	  << (model.vanishing_point_dir * 180.0 * M_1_PI) << std::endl
+			  	  << (model.phi * 180.0 * M_1_PI) << std::endl
 				  << "Number of scale-inliers: " << num_scale_inliers << "\n"
 				  << "Number of orientation-inliers: " << num_orientation_inliers
 				  << "\n\n";
