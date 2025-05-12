@@ -61,7 +61,7 @@ public:
 	inline virtual const SampleSizeType& inlierLimit() const = 0;
 
 	// A flag deciding if the points can be weighted when the non-minimal fitting is applied 
-    inline virtual constexpr bool isWeightingApplicable() const { return true; }
+    inline virtual bool isWeightingApplicable() const { return true; }
 
 	inline virtual SampleSizeType sampleSize() const = 0;
 

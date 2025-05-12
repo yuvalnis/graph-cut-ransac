@@ -125,12 +125,12 @@ public:
     inline bool isValidSample(
 		const DataType& data,
 		const InlierContainerType& inliers
-	) const override
+	) const
 	{
 		return solver->isValidSample(data, inliers);
 	}
 
-    inline bool isValidModel([[maybe_unused]] const Model& model) const override
+    inline bool isValidModel([[maybe_unused]] const Model& model) const
 	{
 		return true;
 	}
@@ -144,7 +144,7 @@ public:
 		[[maybe_unused]] const InlierContainerType& minimal_sample,
 		[[maybe_unused]] const ResidualType& threshold,
 		[[maybe_unused]] bool& model_updated
-	) const override
+	) const
 	{
 		return solver->isValidModel(model, data, inliers, minimal_sample,
                                     threshold, model_updated);

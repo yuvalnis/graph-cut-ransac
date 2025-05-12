@@ -211,8 +211,8 @@ namespace gcransac
 				const size_t &iteration_number_,
 				const ScoreType &best_score_,
 				const cv::Mat &points_,
-				const size_t *minimal_sample_,
-				const size_t sample_number_,
+				[[maybe_unused]] const size_t *minimal_sample_,
+				[[maybe_unused]] const size_t sample_number_,
 				std::vector<size_t> &inliers_,
 				ScoreType &score_,
 				const std::vector<const std::vector<size_t>*> *index_sets_ = nullptr)
@@ -225,7 +225,7 @@ namespace gcransac
 				const double &A = sprt_histories[current_sprt_idx].A;
 
 				double lambda_new, lambda = 1;
-				size_t tested_point = 0, tested_inliers = 0;
+				size_t tested_point = 0;
 				score_ = ScoreType();
 
 				bool valid_model = true;

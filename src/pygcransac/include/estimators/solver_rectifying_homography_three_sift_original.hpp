@@ -27,7 +27,7 @@ public:
     ~RectifyingHomographyThreeSIFTSolverOriginal() {}
 
     // The minimum number of points required for the estimation
-    inline std::array<size_t, 1> sampleSize() const { return {3}; }
+    inline std::array<size_t, 1> sampleSize() const override { return {3}; }
 
     static bool areAllPointsCollinear(
         const cv::Mat& data,
@@ -49,7 +49,7 @@ public:
         const InlierContainerType& inliers,
         std::vector<ScaleBasedRectifyingHomography>& models, // The estimated model parameters
         const WeightType& weights = WeightType{}
-    ) const;
+    ) const override;
 
     static double scaleResidual(
         double x, double y, double s, const ScaleBasedRectifyingHomography& model
@@ -58,12 +58,12 @@ public:
     double residual(
         size_t type, const cv::Mat& feature,
         const ScaleBasedRectifyingHomography& model
-    ) const;
+    ) const override;
 
     double squaredResidual(
         size_t type, const cv::Mat& feature,
         const ScaleBasedRectifyingHomography& model
-    ) const;
+    ) const override;
 
     static bool internalNormalizePoints(
         const cv::Mat& data,
@@ -77,7 +77,7 @@ public:
         const InlierContainerType& inliers,
         MutableDataType& normalized_features,
         NormalizingTransform& normalizing_transform
-    ) const;
+    ) const override;
 
     void getInlierWeightsInternal(
         const std::vector<double>& weights,

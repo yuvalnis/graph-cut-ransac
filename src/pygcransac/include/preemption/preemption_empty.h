@@ -54,17 +54,17 @@ public:
 	static constexpr const char *getName() { return "empty"; }
 
 	static constexpr bool verifyModel(
-		const Model& model_, // The current model
-		const ModelEstimator& estimator_, // The model estimator
-		const ResidualType& threshold_, // The truncated threshold
-		const size_t& iteration_number_, // The current iteration number
-		const ScoreType& best_score_, // The current best score
-		const cv::Mat& points_, // The data points
-		const size_t* minimal_sample_, // The current minimal sample
-		const size_t sample_number_, // The number of samples used
-		InlierContainerType& inliers_,// The current inlier set
-		ScoreType& score_, // The score of the model
-		const std::vector<const std::vector<size_t>*>* index_sets_ = nullptr) // Sets of pre-selected point indices
+		[[maybe_unused]] const Model& model_, // The current model
+		[[maybe_unused]] const ModelEstimator& estimator_, // The model estimator
+		[[maybe_unused]] const ResidualType& threshold_, // The truncated threshold
+		[[maybe_unused]] const size_t& iteration_number_, // The current iteration number
+		[[maybe_unused]] const ScoreType& best_score_, // The current best score
+		[[maybe_unused]] const cv::Mat& points_, // The data points
+		[[maybe_unused]] const size_t* minimal_sample_, // The current minimal sample
+		[[maybe_unused]] const size_t sample_number_, // The number of samples used
+		[[maybe_unused]] InlierContainerType& inliers_,// The current inlier set
+		[[maybe_unused]] ScoreType& score_, // The score of the model
+		[[maybe_unused]] const std::vector<const std::vector<size_t>*>* index_sets_ = nullptr) // Sets of pre-selected point indices
 	{
 		return true;
 	}

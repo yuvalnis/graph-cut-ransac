@@ -25,7 +25,7 @@ public:
     RectifyingHomographyTwoSIFTSolver() {}
     ~RectifyingHomographyTwoSIFTSolver() {}
 
-    inline std::array<size_t, 2> sampleSize() const
+    inline std::array<size_t, 2> sampleSize() const override
     {
         // 2 scale-samples amd 2 orientation-samples are required
         return {2, 2};
@@ -65,7 +65,7 @@ public:
         const InlierContainerType& inliers,
         std::vector<SIFTRectifyingHomography>& models,
         const WeightType& weights = WeightType{}
-    ) const;
+    ) const override;
 
     static double scaleResidual(
         double x, double y, double s, const SIFTRectifyingHomography& model
@@ -76,21 +76,19 @@ public:
     );
 
     double residual(
-        size_t type, const cv::Mat& feature,
-        const SIFTRectifyingHomography& model
-    ) const;
+        size_t type, const cv::Mat& feature, const SIFTRectifyingHomography& model
+    ) const override;
 
     double squaredResidual(
-        size_t type, const cv::Mat& feature,
-        const SIFTRectifyingHomography& model
-    ) const;
+        size_t type, const cv::Mat& feature, const SIFTRectifyingHomography& model
+    ) const override;
 
     bool normalizePoints(
         const DataType& data,
         const InlierContainerType& inliers,
         MutableDataType& normalized_features,
         NormalizingTransform& normalizing_transform
-    ) const;
+    ) const override;
 
 protected:
     static constexpr double kScalePower = 1.0 / 3.0;
@@ -704,8 +702,7 @@ double RectifyingHomographyTwoSIFTSolver::residual(
 }
 
 double RectifyingHomographyTwoSIFTSolver::squaredResidual(
-    size_t type, const cv::Mat& feature,
-    const SIFTRectifyingHomography& model
+    size_t type, const cv::Mat& feature, const SIFTRectifyingHomography& model
 ) const
 {
     const auto r = residual(type, feature, model);

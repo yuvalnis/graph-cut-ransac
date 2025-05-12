@@ -793,9 +793,8 @@ protected:
 				0, points_.row(i), model_
 			);
 			// Storing the residual divided by the squared threshold
-			const auto& quad_cost = distance_per_threshold.emplace_back(
-				std::clamp(sqr_residual / sqr_truncated_thresh, 0.0, 1.0)
-			);
+			const auto quad_cost = std::min(std::max(sqr_residual / sqr_truncated_thresh, 0.0), 1.0);
+			distance_per_threshold.emplace_back(quad_cost);
 			// Calculating the implied unary energy
 			const auto energy = 1.0 - quad_cost;
 
