@@ -1,23 +1,43 @@
-The Graph-Cut RANSAC, MAGSAC and MAGSAC++ algorithms are licensed under the new BSD license. 
-Note that this text refers only to the license for Graph-Cut RANSAC, MAGSAC and MAGSAC++ itself, 
-independent of their dependencies, which are separately licensed. Building Graph-Cut RANSAC, 
-MAGSAC and MAGSAC++ with these dependencies may affect the resulting license.
+This project implements a hybrid RANSAC framework for planar affine rectification
+from local change of scale and orientation, and is based on the Graph-Cut RANSAC
+algorithm. The code is licensed under the BSD 3-Clause License.
+
+================================================================================
+Copyright for Hybrid RANSAC Framework and Modifications (2025):
+================================================================================
+Copyright (c) 2025, Yuval Nissan, Marc Pollefeys, and Daniel Barath
+All rights reserved.
+
+================================================================================
+Original Graph-Cut RANSAC, MAGSAC and MAGSAC++ Copyright:
+================================================================================
+Copyright (c) 2018, Daniel Barath, Czech Technical University
+All rights reserved.
+
+This software is a fork of the original Graph-Cut RANSAC repository
+(https://github.com/danini/graph-cut-ransac). The modifications adapt the
+original implementation to support estimation of a single model using multiple
+feature classes in a hybrid fashion.
+
+================================================================================
+License Terms (BSD 3-Clause License):
+================================================================================
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
 met:
 
     * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
+      notices, this list of conditions and the following disclaimer.
 
     * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
+      copyright notices, this list of conditions and the following
       disclaimer in the documentation and/or other materials provided
       with the distribution.
 
-    * Neither the name of Czech Technical University nor the
-      names of its contributors may be used to endorse or promote products
-      derived from this software without specific prior written permission.
+    * Neither the names of the copyright holders nor the names of their
+      contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -31,6 +51,6 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 
-Please contact the author of this library if you have any questions.
-
-Author: Daniel Barath (barath.daniel@sztaki.mta.hu)
+Note: This license refers only to the code in this repository itself,
+independent of its dependencies, which are separately licensed. Building
+this software with these dependencies may affect the resulting license.
