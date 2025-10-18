@@ -3,7 +3,7 @@ project(GraphCutRANSAC LANGUAGES CXX)
 
 # indicate if OPENMP should be enabled
 option(CREATE_SAMPLE_PROJECT "Create the Sample Project" OFF)
-option(UNIT_TESTS "Run unit tests" ON)
+option(UNIT_TESTS "Build Unit Tests" ON)
 option(TEST_THREE_SIFT_SCALE_ONLY "Test Three SIFT Scale Only" OFF)
 option(TEST_TWO_SIFT "Test Two SIFT" OFF)
 option(TEST_NON_ID_TWO_SIFT "Test Non Identity TWO SIFT" ON)
@@ -100,32 +100,41 @@ if (CREATE_SAMPLE_PROJECT)
 	add_dependencies(SampleProject ${PROJECT_NAME})
 endif (CREATE_SAMPLE_PROJECT)
 
+# ==============================================================================
+# Unit Tests with Google Test
+# ==============================================================================
 if (UNIT_TESTS)
+	# Setup Google Test
+	include(FetchContent)
+	FetchContent_Declare(
+		googletest
+		GIT_REPOSITORY https://github.com/google/googletest.git
+		GIT_TAG v1.14.0
+	)
+	# For Windows: Prevent overriding the parent project's compiler/linker settings
+	set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+	FetchContent_MakeAvailable(googletest)
+	enable_testing()
+	include(GoogleTest)
+
+	# Build unit tests executable
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
 
-	add_executable(
-		unit_tests
-		examples/unit_tests.cpp
-	)
-
-	target_sources(
-		unit_tests
-		PRIVATE ${GCRANSAC_PYTHON_SRC}
-	)
-		
-	target_link_libraries (unit_tests 
-		Eigen3::Eigen)
-		
+	add_executable(unit_tests tests/unit_tests.cpp)
+	target_sources(unit_tests PRIVATE ${GCRANSAC_PYTHON_SRC})
+	
 	target_link_libraries(unit_tests 
+		PRIVATE
+		Eigen3::Eigen
 		${OpenCV_LIBS}
-	)
-
-	target_link_libraries(unit_tests 
-		debug 
 		${PROJECT_NAME}
+		GTest::gtest_main
 	)
 
 	add_dependencies(unit_tests ${PROJECT_NAME})
+
+	# Enable test discovery for CTest integration
+	gtest_discover_tests(unit_tests)
 endif()
 
 if (TEST_THREE_SIFT_SCALE_ONLY)
