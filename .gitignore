@@ -346,7 +346,9 @@ MigrationBackup/
 
 # Specific to this report
 results/*
-build
+build/*
+!build/data/
 dist
 *.egg-info
 .vscode
+venv/

@@ -23,14 +23,51 @@ $ make
 
 # Install Python package and compile C++
 
+## Quick Installation
+
 ```bash
-python3 ./setup.py install
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Fix pylsd for Python 3 compatibility
+python scripts/fix_pylsd.py
+
+# Install the package
+pip install -e .
 ```
 
-or
+## Alternative Installation Methods
+
+### Development Mode (Recommended)
+Install in editable mode for development - changes to Python files take effect immediately:
+```bash
+pip install -e .
+```
+
+### Production Mode
+For a standard non-editable installation:
+```bash
+pip install .
+```
+
+**Note:** The older `python setup.py install` method is deprecated. Use pip instead.
+
+## Note on pylsd Installation
+
+The `pylsd` package on PyPI has Python 2 compatibility issues. After installing dependencies with `pip install -r requirements.txt`, you must run the fix script:
 
 ```bash
-pip3 install -e .
+python scripts/fix_pylsd.py
+```
+
+This script automatically patches the installed `pylsd` package to work with Python 3 by:
+- Converting absolute imports to relative imports
+- Fixing Python 2 exception syntax to Python 3 syntax
+- Fixing tempfile handling to use the system temp directory (prevents file write errors)
+
+If you encounter any issues with `pylsd`, you can verify it's working by running:
+```bash
+python -c "import pylsd; from pylsd import lsd; print('pylsd is working correctly')"
 ```
 
 # Example project
