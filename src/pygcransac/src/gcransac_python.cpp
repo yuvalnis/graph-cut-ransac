@@ -2,7 +2,7 @@
 #include "GCRANSAC.h"
 #include "types.h"
 #include "neighborhood/grid_neighborhood_graph.h"
-#include "preemption/preemption_sprt.h"
+#include "preemption/preemption_empty.h"
 #include "inlier_selectors/empty_inlier_selector.h"
 
 #include <iostream>

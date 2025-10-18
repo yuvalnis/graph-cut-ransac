@@ -326,13 +326,6 @@ PYBIND11_PLUGIN(pygcransac) {
 
     )doc");
 
-	// py::enum_<gcransac::sampler::SamplerType>(m, "SamplerType")
-	// 	.value("UNIFORM", gcransac::sampler::SamplerType::Uniform)
-	// 	.value("PROSAC", gcransac::sampler::SamplerType::ProSaC)
-	// 	.value("PROGRESSIVE_NAPSAC", gcransac::sampler::SamplerType::ProgressiveNapsac)
-	// 	.value("IMPORTANCE", gcransac::sampler::SamplerType::Importance)
-	// 	.value("ADAPTIVE_REORDERING", gcransac::sampler::SamplerType::AdaptiveReordering);
-
 	py::class_<NormalizingTransform>(m, "NormalizingTransform")
 		.def(py::init<>())
 		.def_readwrite("x0", &NormalizingTransform::x0)

@@ -869,69 +869,6 @@ protected:
 		delete problem_graph;
 	}
 
-	ResidualType meanSquaredResiduals(
-		const DataType& points,
-		const InlierContainerType& inliers,
-		const Model& model,
-		const _ModelEstimator& model_estimator
-	) const
-	{
-		ResidualType mean;
-		for (size_t i = 0; i < ResidualDimension; i++)
-		{ 
-			mean(i) = 0.0;
-			for (const auto& inlier_idx : inliers[i])
-			{
-				// TODO optimize by allowing computation of each residual type
-				// separately to avoid re-computation of squared residuals.
-				auto sqr_residual = model_estimator.squaredResidual(
-					i, points[i]->row(inlier_idx), model
-				);
-				mean(i) += sqr_residual;
-			}
-			mean(i) /= static_cast<double>(inliers[i].size());
-		}
-		return mean;
-	}
-
-	void verifyNonIncreasingSquaredResidualMeans(
-		const DataType& points,
-		const InlierContainerType& prev_best_inliers,
-		const Model& prev_best_model,
-		const InlierContainerType& curr_best_inliers,
-		const Model& curr_best_model,
-		const _ModelEstimator& model_estimator,
-		const std::string& calling_func
-	) const
-	{
-		// compute the mean of squared residuals in the previously best model.
-		const auto before_sqr_residuals_mean = meanSquaredResiduals(
-			points, prev_best_inliers, prev_best_model, model_estimator
-		);
-		// compute the mean of squared residuals in the updated best model.
-		const auto after_sqr_residuals_mean = meanSquaredResiduals(
-			points, curr_best_inliers, curr_best_model, model_estimator
-		);
-		// check if mean of squared residuals in non-increasing.
-		// Otherwise, report which type increased following graphCutLocalOptimization.
-		Eigen::Array<bool, ResidualDimension, 1> increasing_residual_means =
-			after_sqr_residuals_mean > before_sqr_residuals_mean;
-		
-		if (!increasing_residual_means.any())
-		{
-			return;
-		}
-
-		std::cout << "Mean of squared residuals increased after call to " << calling_func << ":\n";
-		for (size_t i = 0; i < ResidualDimension; i++)
-		{
-			std::cout << "\tResidual #" << i << ":\n"
-					  << "\t\tStatus: " << (increasing_residual_means(i) ? "increasing" : "non-increasing") << "\n"
-					  << "\t\tBefore: " << before_sqr_residuals_mean(i) << "\n"
-					  << "\t\tAfter: " << after_sqr_residuals_mean(i) << "\n"; 
-		}
-	}
-
 	// Apply the graph-cut optimization for GC-RANSAC
 	bool graphCutLocalOptimization(
 		const DataType& points_, // The input data points
@@ -1018,7 +955,7 @@ protected:
 
 			// Number of points (i.e. the sample size) used in the inner RANSAC
 
-			// TODO deal with multple sample types:
+			// Deal with multple sample types:
 			// 1. Each inlier type has its own sample size.
 			// 2. A sample needs to be drawn from each inlier type.
 			// 3. Estimating the model needs to be done with a combination of
@@ -1116,11 +1053,6 @@ protected:
 		// If the new best score is better than the original one, update the model parameters.
 		if (so_far_the_best_score < max_score) // Comparing the original best score and best score of the local optimization
 		{
-			// verifyNonIncreasingSquaredResidualMeans(
-			// 	points_, so_far_the_best_inliers, so_far_the_best_model_,
-			// 	best_inliers, best_model, model_estimator, 
-			// 	"graphCutLocalOptimization"
-			// );
 			so_far_the_best_score = max_score; // Store the new best score
 			so_far_the_best_model_ = best_model;
 			so_far_the_best_inliers.swap(best_inliers);
@@ -1297,11 +1229,6 @@ protected:
 					// Update the model if its score is higher than that of the current best
 					if (score > best_score)
 					{
-						verifyNonIncreasingSquaredResidualMeans(
-							points, inliers, current_model, tmp_inliers,
-							cand_model, model_estimator, 
-							"iteratedLeastSquaresFitting"
-						);
 						updated = true; // Set a flag saying that the model is updated, so the process should continue
 						best_score = score; // Store the new score
 						current_model = cand_model; // Store the new model
@@ -1317,7 +1244,7 @@ protected:
 			}
 		}
 
-		// If there were more than one iterations, the procedure is considered successfull
+		// If there were more than one iterations, the procedure is considered successful
 		return iterations > 1;
 	}
 };
