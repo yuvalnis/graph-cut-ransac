@@ -1,0 +1,5 @@
+numpy>=2.2.0
+opencv-contrib-python>=4.11.0
+matplotlib>=3.10.0
+jupyter>=1.1.0
+pylsd @ https://files.pythonhosted.org/packages/8d/ac/128158438742944b170ebf81ec6d913df382387f782f87b0ca4bc51b291c/pylsd-0.0.2.tar.gz
