@@ -2,7 +2,7 @@
 
 Here you can find an implementation of the hybrid RANSAC framework proposed in paper:
 Yuval Nissan, Prof. Marc Pollefeys, and Dr. Daniel Barath; Planar Affine Rectification from Local Change of Scale and Orientation,
-Internation Conference on Computer Vision (ICCV), 2025.
+International Conference on Computer Vision (ICCV), 2025.
 
 The implementation is based on the Graph-Cut RANSAC (GCRANSAC) algorithm proposed in paper: [Daniel Barath and Jiri Matas; Graph-Cut RANSAC, Conference on Computer Vision and Pattern Recognition, 2018](http://openaccess.thecvf.com/content_cvpr_2018/papers/Barath_Graph-Cut_RANSAC_CVPR_2018_paper.pdf).
 
