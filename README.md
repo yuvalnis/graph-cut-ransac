@@ -70,14 +70,10 @@ If you encounter any issues with `pylsd`, you can verify it's working by running
 python -c "import pylsd; from pylsd import lsd; print('pylsd is working correctly')"
 ```
 
-# Example project
+# Example Usage
 
-To build the sample project showing examples of fundamental matrix, homography and essential matrix fitting, set variable `CREATE_SAMPLE_PROJECT = ON` when creating the project in CMAKE. 
-Then 
-```shell
-$ cd build
-$ ./SampleProject
-```
+See the Jupyter notebook in the `examples/` directory for a demonstration of how to use the PyGCRANSAC package:
+- `example_planar_affine_rectification.ipynb` - Demonstrates planar affine rectification using hybrid RANSAC
 
 # Requirements
 
@@ -91,7 +87,7 @@ $ ./SampleProject
 When using the method for planar affine rectification using local scales and orientations, please cite
 ```
 @inproceedings{
-    HybridRansac2025,
+    PlanarAffRect2025,
     author = {Nissan, Yuval and Pollefeys, Marc and Barath, Daniel},
     title = {Planar Affine Rectification from Local Change of Scale and Orientation},
     booktitle = {International Conference on Computer Vision},
