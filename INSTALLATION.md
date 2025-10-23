@@ -118,13 +118,6 @@ cmake ..
 make
 ```
 
-To also build the sample project, enable it in CMake:
-```bash
-cmake -DCREATE_SAMPLE_PROJECT=ON ..
-make
-./SampleProject
-```
-
 ## Troubleshooting
 
 ### pylsd Import Error
